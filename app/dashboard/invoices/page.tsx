@@ -410,7 +410,7 @@ export default function InvoicesPage() {
           <h1 className="text-2xl font-bold text-gray-900">Invoices</h1>
           <p className="text-gray-600">Manage and download your invoices</p>
         </div>
-        <Button onClick={handleGenerateInvoice}>
+        <Button className="bg-red-500 text-white text-center" onClick={handleGenerateInvoice}>
           <Plus className="h-4 w-4 mr-2" />
           Generate Invoice
         </Button>
