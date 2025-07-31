@@ -429,7 +429,7 @@ export default function InvoicesPage() {
   const getStatusBadge = (status: string) => {
     switch (status) {
       case "paid":
-        return <Badge className="bg-green-500 text-green-100 hover:bg-green-600">Paid</Badge>
+        return <Badge className="bg-green-500 text-green-300 hover:bg-green-600">Paid</Badge>
       case "pending":
         return <Badge variant="secondary">Pending</Badge>
       case "overdue":
