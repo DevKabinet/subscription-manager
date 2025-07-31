@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Users, FileText, TrendingUp, DollarSign, Calendar, LinkIcon } from "lucide-react"
+import { Users, FileText, TrendingUp, DollarSign, Calendar, LinkIcon, ArrowUpRight, ArrowDownRight } from "lucide-react"
 
 interface DashboardStats {
   totalClients: number
@@ -14,6 +14,20 @@ interface DashboardStats {
   upcomingPayments: number
   overduePayments: number
   linkedSubscriptions: number
+}
+
+interface ChartData {
+  month: string
+  revenue: number
+  clients: number
+  subscriptions: number
+}
+
+interface PaymentStatusData {
+  status: string
+  count: number
+  amount: number
+  color: string
 }
 
 export default function DashboardPage() {
@@ -29,8 +43,12 @@ export default function DashboardPage() {
     linkedSubscriptions: 0,
   })
 
+  const [revenueData, setRevenueData] = useState<ChartData[]>([])
+  const [paymentStatusData, setPaymentStatusData] = useState<PaymentStatusData[]>([])
+
   useEffect(() => {
     calculateStats()
+    loadChartData()
   }, [])
 
   const calculateStats = () => {
@@ -57,15 +75,39 @@ export default function DashboardPage() {
     })
   }
 
+  const loadChartData = () => {
+    // Revenue trend data for the last 6 months
+    const revenueChartData: ChartData[] = [
+      { month: "Aug", revenue: 890.45, clients: 8, subscriptions: 12 },
+      { month: "Sep", revenue: 1024.67, clients: 9, subscriptions: 14 },
+      { month: "Oct", revenue: 1156.23, clients: 10, subscriptions: 15 },
+      { month: "Nov", revenue: 1089.78, clients: 11, subscriptions: 16 },
+      { month: "Dec", revenue: 1198.34, clients: 11, subscriptions: 17 },
+      { month: "Jan", revenue: 1247.82, clients: 12, subscriptions: 18 },
+    ]
+    setRevenueData(revenueChartData)
+
+    // Payment status distribution
+    const paymentData: PaymentStatusData[] = [
+      { status: "Paid", count: 24, amount: 1847.76, color: "bg-green-500" },
+      { status: "Pending", count: 5, amount: 299.95, color: "bg-orange-500" },
+      { status: "Overdue", count: 2, amount: 119.98, color: "bg-red-500" },
+    ]
+    setPaymentStatusData(paymentData)
+  }
+
+  const maxRevenue = Math.max(...revenueData.map((d) => d.revenue))
+  const maxClients = Math.max(...revenueData.map((d) => d.clients))
+
   return (
     <div className="space-y-8">
       {/* Welcome Section */}
-      <div className="text-center py-8">
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">Welcome to Subscription Manager</h1>
-        <p className="text-lg text-gray-600">Manage your clients, subscriptions, and payments all in one place</p>
+      <div className="text-center py-6">
+        <h1 className="text-3xl font-bold text-gray-900 mb-2">Business Dashboard</h1>
+        <p className="text-lg text-gray-600">Track your subscription business performance</p>
       </div>
 
-      {/* Enhanced Stats Cards */}
+      {/* Key Metrics Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <Card className="hover-lift">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -74,18 +116,10 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-blue-600">{stats.totalClients}</div>
-            <p className="text-xs text-muted-foreground">+2 from last month</p>
-          </CardContent>
-        </Card>
-
-        <Card className="hover-lift">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Linked Subscriptions</CardTitle>
-            <LinkIcon className="h-4 w-4 text-indigo-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-indigo-600">{stats.linkedSubscriptions}</div>
-            <p className="text-xs text-muted-foreground">Active client subscriptions</p>
+            <div className="flex items-center text-xs text-green-600">
+              <ArrowUpRight className="h-3 w-3 mr-1" />
+              +2 from last month
+            </div>
           </CardContent>
         </Card>
 
@@ -96,7 +130,24 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-green-600">${stats.monthlyRevenue.toFixed(2)}</div>
-            <p className="text-xs text-muted-foreground">+12.5% from last month</p>
+            <div className="flex items-center text-xs text-green-600">
+              <ArrowUpRight className="h-3 w-3 mr-1" />
+              +12.5% from last month
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="hover-lift">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Active Subscriptions</CardTitle>
+            <LinkIcon className="h-4 w-4 text-indigo-500" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-indigo-600">{stats.linkedSubscriptions}</div>
+            <div className="flex items-center text-xs text-green-600">
+              <ArrowUpRight className="h-3 w-3 mr-1" />
+              +1 this week
+            </div>
           </CardContent>
         </Card>
 
@@ -107,12 +158,144 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-orange-600">{stats.pendingPayments}</div>
-            <p className="text-xs text-muted-foreground">-2 from last week</p>
+            <div className="flex items-center text-xs text-green-600">
+              <ArrowDownRight className="h-3 w-3 mr-1" />
+              -2 from last week
+            </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Additional Stats Row */}
+      {/* Charts Section */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Revenue Trend Chart */}
+        <Card className="hover-lift">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <TrendingUp className="h-5 w-5 text-green-500" />
+              Revenue Trend
+            </CardTitle>
+            <p className="text-sm text-gray-600">Monthly revenue over the last 6 months</p>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {/* Chart Area */}
+              <div className="h-48 flex items-end justify-between gap-2 border-b border-l border-gray-200 pb-2 pl-2">
+                {revenueData.map((data, index) => (
+                  <div key={data.month} className="flex flex-col items-center flex-1">
+                    <div className="w-full flex flex-col items-center">
+                      {/* Revenue Bar */}
+                      <div
+                        className="w-8 bg-gradient-to-t from-green-500 to-green-400 rounded-t-sm mb-1 transition-all duration-300 hover:from-green-600 hover:to-green-500"
+                        style={{
+                          height: `${(data.revenue / maxRevenue) * 120}px`,
+                          minHeight: "20px",
+                        }}
+                        title={`Revenue: $${data.revenue.toFixed(2)}`}
+                      />
+                      {/* Clients Line Point */}
+                      <div
+                        className="w-3 h-3 bg-blue-500 rounded-full border-2 border-white shadow-sm"
+                        style={{
+                          marginBottom: `${(data.clients / maxClients) * 60}px`,
+                        }}
+                        title={`Clients: ${data.clients}`}
+                      />
+                    </div>
+                    <span className="text-xs text-gray-600 mt-2">{data.month}</span>
+                  </div>
+                ))}
+              </div>
+
+              {/* Legend */}
+              <div className="flex items-center justify-center gap-6 text-sm">
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 bg-gradient-to-r from-green-500 to-green-400 rounded"></div>
+                  <span className="text-gray-600">Revenue</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
+                  <span className="text-gray-600">Clients</span>
+                </div>
+              </div>
+
+              {/* Key Insights */}
+              <div className="bg-green-50 p-3 rounded-lg">
+                <div className="flex items-center gap-2 mb-1">
+                  <ArrowUpRight className="h-4 w-4 text-green-600" />
+                  <span className="text-sm font-medium text-green-800">Growth Trend</span>
+                </div>
+                <p className="text-xs text-green-700">
+                  Revenue increased by 40% over the last 6 months with steady client growth
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Payment Status Distribution */}
+        <Card className="hover-lift">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <FileText className="h-5 w-5 text-blue-500" />
+              Payment Status
+            </CardTitle>
+            <p className="text-sm text-gray-600">Current payment distribution</p>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {/* Donut Chart Representation */}
+              <div className="flex items-center justify-center">
+                <div className="relative w-32 h-32">
+                  {/* Outer Ring */}
+                  <div className="absolute inset-0 rounded-full bg-gray-200"></div>
+
+                  {/* Payment Status Segments */}
+                  <div className="absolute inset-2 rounded-full bg-gradient-to-br from-green-400 via-orange-400 to-red-400 opacity-90"></div>
+
+                  {/* Inner Circle */}
+                  <div className="absolute inset-6 rounded-full bg-white flex items-center justify-center">
+                    <div className="text-center">
+                      <div className="text-lg font-bold text-gray-900">31</div>
+                      <div className="text-xs text-gray-600">Total</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Payment Status Breakdown */}
+              <div className="space-y-3">
+                {paymentStatusData.map((item, index) => (
+                  <div key={item.status} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                    <div className="flex items-center gap-3">
+                      <div className={`w-3 h-3 rounded-full ${item.color}`}></div>
+                      <div>
+                        <div className="font-medium text-gray-900">{item.status}</div>
+                        <div className="text-xs text-gray-600">{item.count} payments</div>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="font-medium text-gray-900">${item.amount.toFixed(2)}</div>
+                      <div className="text-xs text-gray-600">{((item.count / 31) * 100).toFixed(0)}%</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Payment Health Indicator */}
+              <div className="bg-blue-50 p-3 rounded-lg">
+                <div className="flex items-center gap-2 mb-1">
+                  <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                  <span className="text-sm font-medium text-blue-800">Payment Health</span>
+                </div>
+                <p className="text-xs text-blue-700">77% of payments are on track with only 6% overdue</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Additional Metrics Row */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <Card className="hover-lift">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -159,31 +342,47 @@ export default function DashboardPage() {
         </Card>
       </div>
 
-      {/* Recent Activity or Summary */}
-      <Card className="hover-lift">
-        <CardHeader>
-          <CardTitle>Business Overview</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      {/* Quick Insights */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <Card className="hover-lift">
+          <CardHeader>
+            <CardTitle className="text-lg">Growth Rate</CardTitle>
+          </CardHeader>
+          <CardContent>
             <div className="text-center">
-              <div className="text-3xl font-bold text-blue-600 mb-2">{stats.totalClients}</div>
-              <p className="text-sm text-gray-600">Active Clients</p>
-              <p className="text-xs text-gray-500 mt-1">Growing steadily</p>
+              <div className="text-3xl font-bold text-green-600 mb-2">+40%</div>
+              <p className="text-sm text-gray-600">Revenue growth</p>
+              <p className="text-xs text-gray-500 mt-1">Last 6 months</p>
             </div>
+          </CardContent>
+        </Card>
+
+        <Card className="hover-lift">
+          <CardHeader>
+            <CardTitle className="text-lg">Client Retention</CardTitle>
+          </CardHeader>
+          <CardContent>
             <div className="text-center">
-              <div className="text-3xl font-bold text-green-600 mb-2">${stats.monthlyRevenue.toFixed(0)}</div>
-              <p className="text-sm text-gray-600">Monthly Revenue</p>
-              <p className="text-xs text-gray-500 mt-1">12.5% increase</p>
+              <div className="text-3xl font-bold text-blue-600 mb-2">92%</div>
+              <p className="text-sm text-gray-600">Retention rate</p>
+              <p className="text-xs text-gray-500 mt-1">Excellent performance</p>
             </div>
+          </CardContent>
+        </Card>
+
+        <Card className="hover-lift">
+          <CardHeader>
+            <CardTitle className="text-lg">Payment Success</CardTitle>
+          </CardHeader>
+          <CardContent>
             <div className="text-center">
-              <div className="text-3xl font-bold text-indigo-600 mb-2">{stats.linkedSubscriptions}</div>
-              <p className="text-sm text-gray-600">Active Subscriptions</p>
-              <p className="text-xs text-gray-500 mt-1">Healthy retention</p>
+              <div className="text-3xl font-bold text-indigo-600 mb-2">94%</div>
+              <p className="text-sm text-gray-600">On-time payments</p>
+              <p className="text-xs text-gray-500 mt-1">Healthy cash flow</p>
             </div>
-          </div>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      </div>
     </div>
   )
 }
