@@ -216,46 +216,54 @@ export default function DashboardPage() {
     <div className="space-y-8">
       {/* Enhanced Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <Card>
+        <Card className="gradient-card hover-lift">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Clients</CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
+            <Users className="h-4 w-4 text-blue-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.totalClients}</div>
+            <div className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-blue-800 bg-clip-text text-transparent">
+              {stats.totalClients}
+            </div>
             <p className="text-xs text-muted-foreground">+2 from last month</p>
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="gradient-card hover-lift">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Linked Subscriptions</CardTitle>
-            <LinkIcon className="h-4 w-4 text-muted-foreground" />
+            <LinkIcon className="h-4 w-4 text-indigo-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.linkedSubscriptions}</div>
+            <div className="text-2xl font-bold bg-gradient-to-r from-indigo-600 to-indigo-800 bg-clip-text text-transparent">
+              {stats.linkedSubscriptions}
+            </div>
             <p className="text-xs text-muted-foreground">Active client subscriptions</p>
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="gradient-card hover-lift">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Monthly Revenue</CardTitle>
-            <DollarSign className="h-4 w-4 text-muted-foreground" />
+            <DollarSign className="h-4 w-4 text-green-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">${stats.monthlyRevenue.toFixed(2)}</div>
+            <div className="text-2xl font-bold bg-gradient-to-r from-green-600 to-green-800 bg-clip-text text-transparent">
+              ${stats.monthlyRevenue.toFixed(2)}
+            </div>
             <p className="text-xs text-muted-foreground">+12.5% from last month</p>
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="gradient-card hover-lift">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Pending Payments</CardTitle>
             <FileText className="h-4 w-4 text-orange-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-orange-600">{stats.pendingPayments}</div>
+            <div className="text-2xl font-bold bg-gradient-to-r from-orange-600 to-orange-800 bg-clip-text text-transparent">
+              {stats.pendingPayments}
+            </div>
             <p className="text-xs text-muted-foreground">-2 from last week</p>
           </CardContent>
         </Card>
@@ -313,12 +321,12 @@ export default function DashboardPage() {
         <h2 className="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {/* Clients Card */}
-          <Card className="group hover:shadow-lg transition-all duration-200 cursor-pointer border-2 hover:border-blue-200">
+          <Card className="group hover:shadow-lg transition-all duration-200 cursor-pointer border-2 hover:border-blue-200 gradient-card hover-lift">
             <Link href="/dashboard/clients" className="block">
               <CardHeader className="pb-3">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <div className="p-2 bg-blue-100 rounded-lg group-hover:bg-blue-200 transition-colors">
+                    <div className="p-2 bg-gradient-to-r from-blue-100 to-blue-200 rounded-lg group-hover:from-blue-200 group-hover:to-blue-300 transition-all">
                       <Users className="h-5 w-5 text-blue-600" />
                     </div>
                     <div>
@@ -331,11 +339,14 @@ export default function DashboardPage() {
               </CardHeader>
               <CardContent className="pt-0">
                 <div className="flex items-center justify-between">
-                  <span className="text-2xl font-bold text-blue-600">{stats.totalClients}</span>
+                  <span className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-blue-800 bg-clip-text text-transparent">
+                    {stats.totalClients}
+                  </span>
                   <Dialog open={isClientModalOpen} onOpenChange={setIsClientModalOpen}>
                     <DialogTrigger asChild>
                       <Button
                         size="sm"
+                        className="hover-lift"
                         onClick={(e) => {
                           e.preventDefault()
                           e.stopPropagation()

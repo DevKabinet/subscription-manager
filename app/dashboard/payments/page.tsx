@@ -14,7 +14,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { FileText, Download, Plus, Paperclip, Filter } from "lucide-react"
+import { FileText, Download, Plus, Paperclip, Filter, Edit } from "lucide-react"
 import jsPDF from "jspdf"
 
 interface Payment {
@@ -645,7 +645,7 @@ export default function PaymentsPage() {
                       "-"
                     )}
                   </TableCell>
-                  <TableCell>
+                  <TableCell className="flex items-center justify-center">
                     {payment.invoiceNumber ? (
                       <Button variant="ghost" size="sm" onClick={() => handleInvoiceClick(payment)}>
                         <FileText className="h-4 w-4 mr-2" />
@@ -658,7 +658,7 @@ export default function PaymentsPage() {
                   <TableCell>
                     <div className="flex gap-1">
                       <Button variant="ghost" size="sm" onClick={() => handleEditPayment(payment)}>
-                        Edit
+                        <Edit className="h-4 w-4" />
                       </Button>
                       <Checkbox
                         checked={payment.status === "paid"}

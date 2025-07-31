@@ -18,7 +18,7 @@ export function DashboardNav() {
   const pathname = usePathname()
 
   return (
-    <nav className="border-b border-gray-200 bg-white">
+    <nav className="nav-gradient">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex space-x-8">
           {navigation.map((item) => {
@@ -29,9 +29,9 @@ export function DashboardNav() {
                 key={item.name}
                 href={item.href}
                 className={cn(
-                  "flex items-center gap-2 py-4 px-1 border-b-2 font-medium text-sm transition-colors",
+                  "flex items-center gap-2 p-4 border-b-2 font-medium text-sm transition-all duration-200 hover-lift rounded-lg",
                   isActive
-                    ? "border-blue-500 text-blue-600"
+                    ? "border-blue-500 text-blue-600 bg-gradient-to-r from-blue-50 to-purple-50 px-3 rounded-t-lg"
                     : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300",
                 )}
               >
