@@ -37,17 +37,10 @@ export default function LoginPage() {
   }
 
   return (
-    <div
-      className="min-h-screen flex items-center justify-center p-4"
-      style={{
-        background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
-      }}
-    >
-      <Card className="w-full max-w-md gradient-card hover-lift">
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
+      <Card className="w-full max-w-md hover-lift">
         <CardHeader className="text-center">
-          <CardTitle className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-            Subscription Manager
-          </CardTitle>
+          <CardTitle className="text-2xl font-bold text-gray-900">Subscription Manager</CardTitle>
           <CardDescription>Sign in to manage your subscriptions</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -76,11 +69,7 @@ export default function LoginPage() {
                 className="hover-lift"
               />
             </div>
-            <Button
-              type="submit"
-              className="w-full hover-lift bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
-              disabled={isLoading}
-            >
+            <Button type="submit" className="w-full hover-lift" disabled={isLoading}>
               {isLoading ? "Signing in..." : "Sign In"}
             </Button>
           </form>
@@ -96,7 +85,7 @@ export default function LoginPage() {
 
           <Button
             variant="outline"
-            className="w-full bg-transparent hover-lift"
+            className="w-full hover-lift bg-transparent"
             onClick={handleTesterLogin}
             disabled={isLoading}
           >

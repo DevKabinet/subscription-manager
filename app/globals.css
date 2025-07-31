@@ -85,52 +85,10 @@
   }
   body {
     @apply bg-background text-foreground;
-    background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 50%, #e2e8f0 100%);
-    min-height: 100vh;
-  }
-
-  .dark body {
-    background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #334155 100%);
   }
 }
 
-/* Custom gradient backgrounds for cards and components */
-.gradient-card {
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.9) 0%, rgba(248, 250, 252, 0.9) 100%);
-  backdrop-filter: blur(10px);
-  border: 1px solid rgba(226, 232, 240, 0.5);
-}
-
-.dark .gradient-card {
-  background: linear-gradient(135deg, rgba(30, 41, 59, 0.9) 0%, rgba(51, 65, 85, 0.9) 100%);
-  border: 1px solid rgba(71, 85, 105, 0.5);
-}
-
-/* Header gradient */
-.header-gradient {
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(248, 250, 252, 0.95) 100%);
-  backdrop-filter: blur(20px);
-  border-bottom: 1px solid rgba(226, 232, 240, 0.6);
-}
-
-.dark .header-gradient {
-  background: linear-gradient(135deg, rgba(15, 23, 42, 0.95) 0%, rgba(30, 41, 59, 0.95) 100%);
-  border-bottom: 1px solid rgba(71, 85, 105, 0.6);
-}
-
-/* Navigation gradient */
-.nav-gradient {
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.98) 0%, rgba(248, 250, 252, 0.98) 100%);
-  backdrop-filter: blur(15px);
-  border-bottom: 1px solid rgba(226, 232, 240, 0.7);
-}
-
-.dark .nav-gradient {
-  background: linear-gradient(135deg, rgba(15, 23, 42, 0.98) 0%, rgba(30, 41, 59, 0.98) 100%);
-  border-bottom: 1px solid rgba(71, 85, 105, 0.7);
-}
-
-/* Subtle animation for interactive elements */
+/* Subtle hover effects */
 .hover-lift {
   transition: all 0.2s ease-in-out;
 }

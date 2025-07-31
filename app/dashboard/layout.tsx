@@ -35,14 +35,12 @@ export default function DashboardLayout({
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <header className="bg-gradient-to-r from-blue-600 to-purple-600 shadow-sm">
+      <header className="bg-white shadow-sm border-b">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center py-4">
-            <h1 className="text-2xl font-bold bg-clip-text text-transparent">Subscription Manager</h1>
+            <h1 className="text-2xl font-bold text-gray-900">Subscription Manager</h1>
             <div className="flex items-center gap-4">
-              <Badge variant="secondary" className="gradient-card">
-                {localStorage.getItem("isTester") ? "Tester Mode" : "Live Mode"}
-              </Badge>
+              <Badge variant="secondary">{localStorage.getItem("isTester") ? "Tester Mode" : "Live Mode"}</Badge>
 
               {/* User Info and Settings */}
               <div className="flex items-center gap-2">
