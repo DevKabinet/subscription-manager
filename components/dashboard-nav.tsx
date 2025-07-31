@@ -29,7 +29,7 @@ export function DashboardNav() {
                 key={item.name}
                 href={item.href}
                 className={cn(
-                  "flex items-center gap-2 py-2 px-3 mx-1 border-b-2 font-medium text-sm transition-all duration-200 rounded-md",
+                  "flex items-center gap-2 py-2 px-3 mx-1 font-medium text-sm transition-all duration-200 rounded-md",
                   isActive
                     ? "border-blue-500 text-blue-600 bg-blue-50"
                     : "border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-100",
