@@ -656,7 +656,7 @@ export default function PaymentsPage() {
                     )}
                   </TableCell>
                   <TableCell>
-                    <div className="flex gap-1">
+                    <div className="flex gap-1 flex-row items-center">
                       <Button variant="ghost" size="sm" onClick={() => handleEditPayment(payment)}>
                         <Edit className="h-4 w-4" />
                       </Button>
