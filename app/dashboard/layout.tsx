@@ -1,14 +1,15 @@
 "use client"
 
 import type React from "react"
-
+import { useState } from "react"
 import { useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Settings, User } from "lucide-react"
+import { Settings, User, Save } from "lucide-react"
 import { DashboardNav } from "@/components/dashboard-nav"
-import Link from "next/link"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Label, Input, Textarea } from "@/components/ui/form"
 
 export default function DashboardLayout({
   children,
@@ -16,6 +17,16 @@ export default function DashboardLayout({
   children: React.ReactNode
 }) {
   const router = useRouter()
+  const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false)
+  const [settings, setSettings] = useState({
+    companyName: "Your Company Name",
+    address: "123 Business St\nCity, State 12345",
+    phone: "+1 (555) 123-4567",
+    email: "contact@yourcompany.com",
+    taxNumber: "TAX123456789",
+    logoUrl: "",
+  })
+  const [isSaving, setIsSaving] = useState(false)
 
   useEffect(() => {
     const isAuthenticated = localStorage.getItem("isAuthenticated")
@@ -33,6 +44,22 @@ export default function DashboardLayout({
 
   const userEmail = localStorage.getItem("userEmail") || "user@example.com"
 
+  const handleSettingsSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setIsSaving(true)
+
+    // Simulate saving settings
+    setTimeout(() => {
+      setIsSaving(false)
+      setIsSettingsModalOpen(false)
+      alert("Company settings saved successfully!")
+    }, 1000)
+  }
+
+  const handleInputChange = (field: string, value: string) => {
+    setSettings((prev) => ({ ...prev, [field]: value }))
+  }
+
   return (
     <div className="min-h-screen bg-gray-50">
       <header className="bg-white shadow-sm border-b">
@@ -48,11 +75,9 @@ export default function DashboardLayout({
                   <User className="h-4 w-4" />
                   <span>{userEmail}</span>
                 </div>
-                <Link href="/dashboard/settings">
-                  <Button variant="ghost" size="sm" className="hover-lift">
-                    <Settings className="h-4 w-4" />
-                  </Button>
-                </Link>
+                <Button variant="ghost" size="sm" className="hover-lift" onClick={() => setIsSettingsModalOpen(true)}>
+                  <Settings className="h-4 w-4" />
+                </Button>
               </div>
 
               <Button variant="outline" onClick={handleLogout} className="hover-lift bg-transparent">
@@ -66,6 +91,90 @@ export default function DashboardLayout({
       <DashboardNav />
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">{children}</main>
+
+      {/* Company Settings Modal */}
+      <Dialog open={isSettingsModalOpen} onOpenChange={setIsSettingsModalOpen}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Company Settings</DialogTitle>
+            <DialogDescription>
+              Update your company details that will appear on invoices and other documents
+            </DialogDescription>
+          </DialogHeader>
+
+          <form onSubmit={handleSettingsSubmit} className="space-y-6">
+            <div className="space-y-2">
+              <Label htmlFor="companyName">Company Name</Label>
+              <Input
+                id="companyName"
+                value={settings.companyName}
+                onChange={(e) => handleInputChange("companyName", e.target.value)}
+                required
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="address">Address</Label>
+              <Textarea
+                id="address"
+                value={settings.address}
+                onChange={(e) => handleInputChange("address", e.target.value)}
+                rows={3}
+                placeholder="Enter your company address"
+              />
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="phone">Phone</Label>
+                <Input
+                  id="phone"
+                  value={settings.phone}
+                  onChange={(e) => handleInputChange("phone", e.target.value)}
+                  placeholder="+1 (555) 123-4567"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="email">Email</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  value={settings.email}
+                  onChange={(e) => handleInputChange("email", e.target.value)}
+                  placeholder="contact@yourcompany.com"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="taxNumber">Tax Number / ID</Label>
+              <Input
+                id="taxNumber"
+                value={settings.taxNumber}
+                onChange={(e) => handleInputChange("taxNumber", e.target.value)}
+                placeholder="TAX123456789"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="logoUrl">Logo URL (Optional)</Label>
+              <Input
+                id="logoUrl"
+                type="url"
+                value={settings.logoUrl}
+                onChange={(e) => handleInputChange("logoUrl", e.target.value)}
+                placeholder="https://example.com/logo.png"
+              />
+            </div>
+
+            <Button type="submit" className="w-full" disabled={isSaving}>
+              <Save className="h-4 w-4 mr-2" />
+              {isSaving ? "Saving..." : "Save Settings"}
+            </Button>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
