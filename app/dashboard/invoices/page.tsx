@@ -49,6 +49,23 @@ interface CompanySettings {
   taxNumber: string
 }
 
+interface InvoicePreview {
+  invoiceNumber: string
+  clientName: string
+  clientEmail: string
+  clientAddress: string
+  subscriptionName: string
+  amount: number
+  issueDate: string
+  dueDate: string
+  companyName: string
+  companyAddress: string
+  companyPhone: string
+  companyEmail: string
+  taxNumber: string
+  isSetupInvoice?: boolean
+}
+
 export default function InvoicesPage() {
   const [invoices, setInvoices] = useState<Invoice[]>([])
   const [selectedClient, setSelectedClient] = useState<string>("all")
@@ -66,6 +83,8 @@ export default function InvoicesPage() {
   })
   const [isGenerating, setIsGenerating] = useState(false)
   const router = useRouter()
+  const [isInvoiceModalOpen, setIsInvoiceModalOpen] = useState(false)
+  const [selectedInvoice, setSelectedInvoice] = useState<InvoicePreview | null>(null)
 
   useEffect(() => {
     const isAuthenticated = localStorage.getItem("isAuthenticated")
@@ -380,8 +399,25 @@ export default function InvoicesPage() {
   }
 
   const previewInvoice = (invoice: Invoice) => {
-    // In a real app, this would open a preview modal
-    router.push(`/dashboard/invoices/preview/${invoice.id}`)
+    const invoicePreview: InvoicePreview = {
+      invoiceNumber: invoice.invoiceNumber,
+      clientName: invoice.clientName,
+      clientEmail: `${invoice.clientName.toLowerCase().replace(" ", ".")}@example.com`,
+      clientAddress: "456 Client Ave, City, State 12345",
+      subscriptionName: invoice.subscriptionName,
+      amount: invoice.amount,
+      issueDate: invoice.issueDate,
+      dueDate: invoice.dueDate,
+      companyName: "Your Company Name",
+      companyAddress: "123 Business St\nCity, State 12345",
+      companyPhone: "+1 (555) 123-4567",
+      companyEmail: "contact@yourcompany.com",
+      taxNumber: "TAX123456789",
+      isSetupInvoice: invoice.isSetupInvoice,
+    }
+
+    setSelectedInvoice(invoicePreview)
+    setIsInvoiceModalOpen(true)
   }
 
   const filteredInvoices = invoices.filter((invoice) => {
@@ -393,7 +429,7 @@ export default function InvoicesPage() {
   const getStatusBadge = (status: string) => {
     switch (status) {
       case "paid":
-        return <Badge variant="default">Paid</Badge>
+        return <Badge className="bg-green-500 text-green-100 hover:bg-green-600">Paid</Badge>
       case "pending":
         return <Badge variant="secondary">Pending</Badge>
       case "overdue":
@@ -401,6 +437,96 @@ export default function InvoicesPage() {
       default:
         return <Badge variant="outline">{status}</Badge>
     }
+  }
+
+  const downloadInvoiceFromModal = () => {
+    if (!selectedInvoice) return
+
+    const doc = new jsPDF()
+
+    // Company header
+    doc.setFontSize(20)
+    doc.setFont("helvetica", "bold")
+    doc.text(selectedInvoice.companyName, 20, 30)
+
+    doc.setFontSize(10)
+    doc.setFont("helvetica", "normal")
+    const companyAddressLines = selectedInvoice.companyAddress.split("\n")
+    companyAddressLines.forEach((line, index) => {
+      doc.text(line, 20, 40 + index * 5)
+    })
+    doc.text(selectedInvoice.companyPhone, 20, 40 + companyAddressLines.length * 5)
+    doc.text(selectedInvoice.companyEmail, 20, 45 + companyAddressLines.length * 5)
+    if (selectedInvoice.taxNumber) {
+      doc.text(`Tax ID: ${selectedInvoice.taxNumber}`, 20, 50 + companyAddressLines.length * 5)
+    }
+
+    // Invoice title and number
+    doc.setFontSize(24)
+    doc.setFont("helvetica", "bold")
+    doc.text("INVOICE", 150, 30)
+
+    doc.setFontSize(12)
+    doc.setFont("helvetica", "normal")
+    doc.text(`#${selectedInvoice.invoiceNumber}`, 150, 40)
+
+    // Client information
+    doc.setFontSize(12)
+    doc.setFont("helvetica", "bold")
+    doc.text("Bill To:", 20, 80)
+
+    doc.setFont("helvetica", "normal")
+    doc.text(selectedInvoice.clientName, 20, 90)
+    doc.text(selectedInvoice.clientEmail, 20, 95)
+    const clientAddressLines = selectedInvoice.clientAddress.split("\n")
+    clientAddressLines.forEach((line, index) => {
+      doc.text(line, 20, 100 + index * 5)
+    })
+
+    // Invoice details
+    doc.setFont("helvetica", "bold")
+    doc.text("Invoice Details:", 120, 80)
+
+    doc.setFont("helvetica", "normal")
+    doc.text(`Issue Date: ${new Date(selectedInvoice.issueDate).toLocaleDateString()}`, 120, 90)
+    if (selectedInvoice.dueDate) {
+      doc.text(`Due Date: ${new Date(selectedInvoice.dueDate).toLocaleDateString()}`, 120, 95)
+    }
+
+    // Table header
+    doc.setFont("helvetica", "bold")
+    doc.text("Description", 20, 130)
+    doc.text("Amount", 150, 130)
+
+    // Draw line under header
+    doc.line(20, 135, 190, 135)
+
+    // Table content
+    doc.setFont("helvetica", "normal")
+    doc.text(selectedInvoice.subscriptionName, 20, 145)
+    doc.text(`$${selectedInvoice.amount.toFixed(2)}`, 150, 145)
+
+    // Total
+    doc.line(20, 155, 190, 155)
+    doc.setFont("helvetica", "bold")
+    doc.text("Total:", 130, 165)
+    doc.text(`$${selectedInvoice.amount.toFixed(2)}`, 150, 165)
+
+    // Payment instructions
+    doc.setFont("helvetica", "bold")
+    doc.text("Payment Instructions:", 20, 190)
+
+    doc.setFont("helvetica", "normal")
+    const paymentText = "Please make payment by the due date. Payment can be made via cash, check, or bank transfer."
+    const splitText = doc.splitTextToSize(paymentText, 170)
+    doc.text(splitText, 20, 200)
+
+    // Footer
+    doc.setFont("helvetica", "italic")
+    doc.text("Thank you for your business!", 105, 250, { align: "center" })
+
+    // Save the PDF
+    doc.save(`${selectedInvoice.invoiceNumber}.pdf`)
   }
 
   return (
@@ -485,7 +611,11 @@ export default function InvoicesPage() {
                     )}
                   </TableCell>
                   <TableCell>{invoice.clientName}</TableCell>
-                  <TableCell>{invoice.subscriptionName}</TableCell>
+                  <TableCell>
+                    <Badge variant="outline" className="text-xs">
+                      {invoice.subscriptionName}
+                    </Badge>
+                  </TableCell>
                   <TableCell>${invoice.amount.toFixed(2)}</TableCell>
                   <TableCell>{new Date(invoice.issueDate).toLocaleDateString()}</TableCell>
                   <TableCell>
@@ -508,6 +638,110 @@ export default function InvoicesPage() {
           </Table>
         </CardContent>
       </Card>
+
+      {/* Invoice Preview Modal */}
+      <Dialog open={isInvoiceModalOpen} onOpenChange={setIsInvoiceModalOpen}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center justify-between">
+              <span>Invoice Preview - {selectedInvoice?.invoiceNumber}</span>
+              <Button onClick={downloadInvoiceFromModal} size="sm">
+                <Download className="h-4 w-4 mr-2" />
+                Download PDF
+              </Button>
+            </DialogTitle>
+            <DialogDescription>Preview and download invoice</DialogDescription>
+          </DialogHeader>
+
+          {selectedInvoice && (
+            <div className="bg-white p-8 border rounded-lg">
+              {/* Invoice Header */}
+              <div className="flex justify-between items-start mb-8">
+                <div>
+                  <h1 className="text-3xl font-bold text-gray-900 mb-2">INVOICE</h1>
+                  <p className="text-lg font-semibold text-gray-600">#{selectedInvoice.invoiceNumber}</p>
+                </div>
+                <div className="text-right">
+                  <h2 className="text-xl font-bold text-gray-900">{selectedInvoice.companyName}</h2>
+                  <p className="text-gray-600 whitespace-pre-line">{selectedInvoice.companyAddress}</p>
+                  <p className="text-gray-600">{selectedInvoice.companyPhone}</p>
+                  <p className="text-gray-600">{selectedInvoice.companyEmail}</p>
+                  {selectedInvoice.taxNumber && <p className="text-gray-600">Tax ID: {selectedInvoice.taxNumber}</p>}
+                </div>
+              </div>
+
+              {/* Invoice Details */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-3">Bill To:</h3>
+                  <div className="text-gray-600">
+                    <p className="font-medium">{selectedInvoice.clientName}</p>
+                    <p>{selectedInvoice.clientEmail}</p>
+                    <p className="whitespace-pre-line">{selectedInvoice.clientAddress}</p>
+                  </div>
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-3">Invoice Details:</h3>
+                  <div className="text-gray-600 space-y-1">
+                    <p>
+                      <span className="font-medium">Issue Date:</span>{" "}
+                      {new Date(selectedInvoice.issueDate).toLocaleDateString()}
+                    </p>
+                    {selectedInvoice.dueDate && (
+                      <p>
+                        <span className="font-medium">Due Date:</span>{" "}
+                        {new Date(selectedInvoice.dueDate).toLocaleDateString()}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Invoice Items */}
+              <div className="mb-8">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b-2 border-gray-300">
+                      <th className="text-left py-3 font-semibold text-gray-900">Description</th>
+                      <th className="text-right py-3 font-semibold text-gray-900">Amount</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr className="border-b border-gray-200">
+                      <td className="py-4 text-gray-600">{selectedInvoice.subscriptionName}</td>
+                      <td className="py-4 text-right text-gray-600">${selectedInvoice.amount.toFixed(2)}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Invoice Total */}
+              <div className="flex justify-end mb-8">
+                <div className="w-64">
+                  <div className="flex justify-between py-2 border-t-2 border-gray-300">
+                    <span className="font-semibold text-gray-900">Total:</span>
+                    <span className="font-bold text-xl text-gray-900">${selectedInvoice.amount.toFixed(2)}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Payment Instructions */}
+              <div className="border-t border-gray-200 pt-6">
+                <h3 className="text-lg font-semibold text-gray-900 mb-3">Payment Instructions</h3>
+                <p className="text-gray-600">
+                  Please make payment by the due date. Payment can be made via cash, check, or bank transfer. For any
+                  questions regarding this invoice, please contact us at {selectedInvoice.companyEmail}.
+                </p>
+              </div>
+
+              {/* Footer */}
+              <div className="text-center text-gray-500 text-sm mt-8 pt-6 border-t border-gray-200">
+                <p>Thank you for your business!</p>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* Generate Invoice Modal */}
       <Dialog open={isGenerateModalOpen} onOpenChange={setIsGenerateModalOpen}>

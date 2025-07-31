@@ -193,7 +193,9 @@ export default function ClientsPage() {
                   <TableCell>{client.email}</TableCell>
                   <TableCell>{client.phone}</TableCell>
                   <TableCell>
-                    <Badge variant="secondary">{client.activeSubscriptions}</Badge>
+                    <Badge variant="outline" className="text-xs">
+                      {client.activeSubscriptions} active
+                    </Badge>
                   </TableCell>
                   <TableCell>${client.totalRevenue.toFixed(2)}</TableCell>
                   <TableCell>

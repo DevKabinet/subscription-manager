@@ -436,7 +436,7 @@ export default function PaymentsPage() {
   const getStatusBadge = (status: Payment["status"]) => {
     switch (status) {
       case "paid":
-        return <Badge variant="default">Paid</Badge>
+        return <Badge className="bg-green-500 text-green-100 hover:bg-green-600">Paid</Badge>
       case "pending":
         return <Badge variant="secondary">Pending</Badge>
       case "overdue":
@@ -628,7 +628,14 @@ export default function PaymentsPage() {
               {filteredPayments.map((payment) => (
                 <TableRow key={payment.id}>
                   <TableCell className="font-medium">{payment.clientName}</TableCell>
-                  <TableCell>{payment.subscriptionName}</TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-2">
+                      <span>{payment.subscriptionName}</span>
+                      <Badge variant="outline" className="text-xs">
+                        ${payment.amount.toFixed(2)}
+                      </Badge>
+                    </div>
+                  </TableCell>
                   <TableCell>${payment.amount.toFixed(2)}</TableCell>
                   <TableCell>{new Date(payment.paymentDate).toLocaleDateString()}</TableCell>
                   <TableCell>{new Date(payment.dueDate).toLocaleDateString()}</TableCell>

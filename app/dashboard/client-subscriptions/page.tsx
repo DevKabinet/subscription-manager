@@ -304,7 +304,7 @@ export default function ClientSubscriptionsPage() {
   const getStatusBadge = (status: ClientSubscription["status"]) => {
     switch (status) {
       case "active":
-        return <Badge variant="default">Active</Badge>
+        return <Badge className="bg-green-500 text-green-100 hover:bg-green-600">Active</Badge>
       case "paused":
         return <Badge variant="secondary">Paused</Badge>
       case "cancelled":
@@ -471,7 +471,14 @@ export default function ClientSubscriptionsPage() {
               {clientSubscriptions.map((cs) => (
                 <TableRow key={cs.id}>
                   <TableCell className="font-medium">{cs.clientName}</TableCell>
-                  <TableCell>{cs.subscriptionName}</TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-2">
+                      <span>{cs.subscriptionName}</span>
+                      <Badge variant="outline" className="text-xs">
+                        ${cs.price.toFixed(2)}
+                      </Badge>
+                    </div>
+                  </TableCell>
                   <TableCell>${cs.price.toFixed(2)}</TableCell>
                   <TableCell>{new Date(cs.startDate).toLocaleDateString()}</TableCell>
                   <TableCell>{cs.endDate ? new Date(cs.endDate).toLocaleDateString() : "-"}</TableCell>

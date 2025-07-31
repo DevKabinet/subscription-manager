@@ -208,7 +208,14 @@ export default function SubscriptionsPage() {
             <TableBody>
               {subscriptions.map((subscription) => (
                 <TableRow key={subscription.id}>
-                  <TableCell className="font-medium">{subscription.name}</TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium">{subscription.name}</span>
+                      <Badge variant="outline" className="text-xs">
+                        {subscription.billingCycle}
+                      </Badge>
+                    </div>
+                  </TableCell>
                   <TableCell>{subscription.description}</TableCell>
                   <TableCell>${subscription.price.toFixed(2)}</TableCell>
                   <TableCell>
