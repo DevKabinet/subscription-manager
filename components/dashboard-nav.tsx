@@ -20,7 +20,7 @@ export function DashboardNav() {
   return (
     <nav className="border-b border-gray-200 bg-white">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex space-x-8 py-2">
+        <div className="flex space-x-4 py-2">
           {navigation.map((item) => {
             const Icon = item.icon
             const isActive = pathname === item.href
