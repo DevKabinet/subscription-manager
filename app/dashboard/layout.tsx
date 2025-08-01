@@ -6,10 +6,11 @@ import { useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Settings, User, Save } from "lucide-react"
+import { Settings, User, Save, DollarSign } from "lucide-react"
 import { DashboardNav } from "@/components/dashboard-nav"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Label, Input, Textarea } from "@/components/ui/form"
+import { ExchangeRateModal } from "@/components/exchange-rate-modal"
 
 export default function DashboardLayout({
   children,
@@ -18,6 +19,7 @@ export default function DashboardLayout({
 }) {
   const router = useRouter()
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false)
+  const [isExchangeRateModalOpen, setIsExchangeRateModalOpen] = useState(false)
   const [settings, setSettings] = useState({
     companyName: "Your Company Name",
     address: "123 Business St\nCity, State 12345",
@@ -68,6 +70,17 @@ export default function DashboardLayout({
             <h1 className="text-2xl font-bold text-gray-900">Subscription Manager</h1>
             <div className="flex items-center gap-4">
               <Badge variant="secondary">{localStorage.getItem("isTester") ? "Tester Mode" : "Live Mode"}</Badge>
+
+              {/* Exchange Rate Button */}
+              <Button
+                variant="ghost"
+                size="sm"
+                className="hover-lift flex items-center gap-2"
+                onClick={() => setIsExchangeRateModalOpen(true)}
+              >
+                <DollarSign className="h-4 w-4 text-green-500" />
+                <span className="hidden sm:inline">Exchange Rates</span>
+              </Button>
 
               {/* User Info and Settings */}
               <div className="flex items-center gap-2">
@@ -175,6 +188,9 @@ export default function DashboardLayout({
           </form>
         </DialogContent>
       </Dialog>
+
+      {/* Exchange Rate Modal */}
+      <ExchangeRateModal isOpen={isExchangeRateModalOpen} onClose={() => setIsExchangeRateModalOpen(false)} />
     </div>
   )
 }
