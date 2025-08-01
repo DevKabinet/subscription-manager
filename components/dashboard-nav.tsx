@@ -129,7 +129,7 @@ export function DashboardNav() {
                       </p>
                       <p className="text-xs leading-none text-muted-foreground">{user?.email}</p>
                       <Badge variant="outline" className="w-fit text-xs">
-                        {user?.role}
+                        {user?.role === "admin" ? "Administrator" : "User"}
                       </Badge>
                     </div>
                   </DropdownMenuLabel>

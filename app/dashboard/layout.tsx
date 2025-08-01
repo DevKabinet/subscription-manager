@@ -86,8 +86,8 @@ export default function DashboardLayout({
     )
   }
 
-  const getRoleBadgeColor = (roleName: string) => {
-    switch (roleName) {
+  const getRoleBadgeColor = (role: string) => {
+    switch (role) {
       case "admin":
         return "bg-red-500"
       case "manager":
@@ -114,9 +114,7 @@ export default function DashboardLayout({
             </div>
             <div className="flex items-center gap-4">
               {/* Role Badge */}
-              <Badge className={`text-white text-xs ${getRoleBadgeColor(user.roleName)}`}>
-                {user.roleName.toUpperCase()}
-              </Badge>
+              <Badge className={`text-white text-xs ${getRoleBadgeColor(user.role)}`}>{user.role.toUpperCase()}</Badge>
 
               {/* Exchange Rate Button */}
               <Button
