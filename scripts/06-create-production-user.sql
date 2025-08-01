@@ -1,36 +1,24 @@
--- Create a production user (non-tester)
--- This script creates a regular user account for production use
+-- Create a new user for the application with limited privileges
+CREATE USER app_user WITH PASSWORD 'your_secure_password';
 
-INSERT INTO users (email, password_hash, is_tester) 
-VALUES ('admin@company.com', 'production_password_hash', FALSE)
-ON CONFLICT (email) DO NOTHING;
+-- Grant connect privilege to the database
+GRANT CONNECT ON DATABASE postgres TO app_user;
 
--- Insert default company settings for the production user
-INSERT INTO company_settings (user_id, company_name, address, phone, email, tax_number)
-SELECT id, 'Your Company Name', '123 Business St, City, State 12345', '+1 (555) 123-4567', 'contact@yourcompany.com', 'TAX123456789'
-FROM users WHERE email = 'admin@company.com'
-ON CONFLICT DO NOTHING;
+-- Grant usage privilege on schemas
+GRANT USAGE ON SCHEMA public TO app_user;
 
--- Create some basic subscription plans for the production user
-INSERT INTO subscriptions (user_id, name, description, price, billing_cycle)
-SELECT id, 'Starter Plan', 'Perfect for small businesses getting started', 19.99, 'monthly'
-FROM users WHERE email = 'admin@company.com';
+-- Grant SELECT, INSERT, UPDATE, DELETE privileges on tables
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO app_user;
 
-INSERT INTO subscriptions (user_id, name, description, price, billing_cycle)
-SELECT id, 'Professional Plan', 'Ideal for growing businesses', 49.99, 'monthly'
-FROM users WHERE email = 'admin@company.com';
+-- Grant usage on sequences (for UUIDs or auto-incrementing IDs)
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO app_user;
 
-INSERT INTO subscriptions (user_id, name, description, price, billing_cycle)
-SELECT id, 'Enterprise Plan', 'Full-featured plan for large organizations', 99.99, 'monthly'
-FROM users WHERE email = 'admin@company.com';
+-- Optionally, set default privileges for future tables
+ALTER DEFAULT PRIVILEGES IN SCHEMA public
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO app_user;
 
--- Log the creation
-INSERT INTO migration_log (migration_name) VALUES ('06-create-production-user.sql');
+ALTER DEFAULT PRIVILEGES IN SCHEMA public
+GRANT USAGE, SELECT ON SEQUENCES TO app_user;
 
-DO $$
-BEGIN
-  RAISE NOTICE 'Production user created successfully!';
-  RAISE NOTICE 'Email: admin@company.com';
-  RAISE NOTICE 'User type: Production (non-tester)';
-  RAISE NOTICE 'Default subscription plans created';
-END $$;
+-- IMPORTANT: Replace 'your_secure_password' with a strong, unique password.
+-- In a production environment, manage this password securely (e.g., using environment variables).

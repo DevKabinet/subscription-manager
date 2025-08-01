@@ -1,15 +1,14 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import * as React from "react"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { useExchangeRateStore } from "@/lib/exchange-rates"
-import { RefreshCw, Save, History, DollarSign } from "lucide-react"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { format } from "date-fns"
+import { useExchangeRateStore } from "@/lib/exchange-rates"
+import { RefreshCw, Save, X } from "lucide-react"
 
 interface ExchangeRateModalProps {
   isOpen: boolean
@@ -19,201 +18,177 @@ interface ExchangeRateModalProps {
 export function ExchangeRateModal({ isOpen, onClose }: ExchangeRateModalProps) {
   const { rates, history, isLoading, error, fetchRates, updateRate, getCurrencyFlag, getSupportedCurrencies } =
     useExchangeRateStore()
-  const [newRates, setNewRates] = useState<{ [key: string]: string }>({})
-  const [selectedBaseCurrency, setSelectedBaseCurrency] = useState("USD")
 
-  useEffect(() => {
-    if (isOpen) {
-      fetchRates()
-      // Initialize newRates with current rates for editing
-      const initialNewRates: { [key: string]: string } = {}
-      rates.forEach((rate) => {
-        if (rate.base_currency === selectedBaseCurrency) {
-          initialNewRates[rate.target_currency] = rate.rate.toString()
-        }
-      })
-      setNewRates(initialNewRates)
-    }
-  }, [isOpen, rates, fetchRates, selectedBaseCurrency])
+  const [newRateValue, setNewRateValue] = React.useState<string>("")
+  const [selectedCurrency, setSelectedCurrency] = React.useState<string>("EUR")
 
-  const handleRateChange = (currency: string, value: string) => {
-    setNewRates((prev) => ({ ...prev, [currency]: value }))
-  }
-
-  const handleSaveRate = (targetCurrency: string) => {
-    const rateValue = Number.parseFloat(newRates[targetCurrency])
-    if (!isNaN(rateValue) && rateValue > 0) {
-      updateRate(selectedBaseCurrency, targetCurrency, rateValue, true, "Admin User")
-      // Optionally refetch rates to ensure consistency, or rely on store update
-      // fetchRates();
-    } else {
-      alert("Please enter a valid positive number for the exchange rate.")
+  const handleUpdateRate = () => {
+    const rate = Number.parseFloat(newRateValue)
+    if (!isNaN(rate) && rate > 0) {
+      updateRate("USD", selectedCurrency, rate, true, "Admin") // Assuming "Admin" as current user for manual update
+      setNewRateValue("")
     }
   }
 
-  const filteredRates = rates.filter((rate) => rate.base_currency === selectedBaseCurrency)
-  const availableCurrencies = getSupportedCurrencies()
+  const supportedCurrencies = getSupportedCurrencies().filter((currency) => currency !== "USD")
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-4xl h-[90vh] flex flex-col">
+      <DialogContent className="sm:max-w-[800px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <DollarSign className="h-6 w-6 text-green-600" /> Exchange Rate Management
-          </DialogTitle>
-          <DialogDescription>Manage and view historical exchange rates for your business.</DialogDescription>
+          <DialogTitle>Exchange Rate Management</DialogTitle>
+          <DialogDescription>
+            Manage and view historical exchange rates. Rates are updated automatically, but can be manually adjusted.
+          </DialogDescription>
         </DialogHeader>
-
-        <Tabs defaultValue="current" className="flex-1 flex flex-col overflow-hidden">
+        <Tabs defaultValue="current-rates" className="w-full">
           <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="current">Current Rates</TabsTrigger>
+            <TabsTrigger value="current-rates">Current Rates</TabsTrigger>
             <TabsTrigger value="history">History</TabsTrigger>
           </TabsList>
-
-          <TabsContent value="current" className="flex-1 flex flex-col overflow-hidden">
+          <TabsContent value="current-rates" className="mt-4">
             <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-2">
-                <Label htmlFor="base-currency">Base Currency:</Label>
-                <select
-                  id="base-currency"
-                  value={selectedBaseCurrency}
-                  onChange={(e) => setSelectedBaseCurrency(e.target.value)}
-                  className="p-2 border rounded-md"
-                >
-                  {availableCurrencies.map((currency) => (
-                    <option key={currency} value={currency}>
-                      {getCurrencyFlag(currency)} {currency}
-                    </option>
-                  ))}
-                </select>
-              </div>
+              <h3 className="text-lg font-semibold">Current Exchange Rates (Base: USD)</h3>
               <Button onClick={fetchRates} disabled={isLoading} size="sm">
-                <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? "animate-spin" : ""}`} />
-                Refresh Rates
+                <RefreshCw className={`mr-2 h-4 w-4 ${isLoading ? "animate-spin" : ""}`} />
+                {isLoading ? "Updating..." : "Refresh Rates"}
               </Button>
             </div>
-
-            {error && <div className="text-red-500 text-center mb-4">{error}</div>}
-
-            <div className="flex-1 overflow-auto border rounded-md">
+            {error && <p className="text-red-500 text-sm mb-4">{error}</p>}
+            <div className="rounded-md border">
               <Table>
                 <TableHeader>
                   <TableRow>
                     <TableHead>Currency</TableHead>
-                    <TableHead>Rate (1 {selectedBaseCurrency} = ?)</TableHead>
+                    <TableHead>Rate (1 USD = X)</TableHead>
                     <TableHead>Last Updated</TableHead>
-                    <TableHead>Manual Update</TableHead>
+                    <TableHead>Source</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {isLoading ? (
-                    <TableRow>
-                      <TableCell colSpan={5} className="text-center py-8">
-                        Loading exchange rates...
-                      </TableCell>
-                    </TableRow>
-                  ) : filteredRates.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={5} className="text-center py-8">
-                        No exchange rates available for {selectedBaseCurrency}.
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    filteredRates.map((rate) => (
+                  {rates
+                    .filter((rate) => rate.target_currency !== "USD")
+                    .map((rate) => (
                       <TableRow key={rate.target_currency}>
                         <TableCell className="font-medium">
                           {getCurrencyFlag(rate.target_currency)} {rate.target_currency}
                         </TableCell>
+                        <TableCell>{rate.rate.toFixed(4)}</TableCell>
                         <TableCell>
-                          <div className="flex items-center gap-2">
-                            <Input
-                              type="number"
-                              step="0.0001"
-                              value={newRates[rate.target_currency] || rate.rate.toString()}
-                              onChange={(e) => handleRateChange(rate.target_currency, e.target.value)}
-                              className="w-32"
-                            />
-                          </div>
+                          {new Date(rate.last_updated).toLocaleDateString()}
+                          {" at "}
+                          {new Date(rate.last_updated).toLocaleTimeString()}
                         </TableCell>
-                        <TableCell>{format(new Date(rate.last_updated), "MMM dd, yyyy HH:mm")}</TableCell>
-                        <TableCell>
-                          {rate.is_manual ? (
-                            <span className="text-blue-600">Yes</span>
-                          ) : (
-                            <span className="text-gray-500">No</span>
-                          )}
-                          {rate.manual_updated_at && (
-                            <div className="text-xs text-gray-500">
-                              by {rate.manual_updated_by} on {format(new Date(rate.manual_updated_at), "MMM dd, yyyy")}
-                            </div>
-                          )}
-                        </TableCell>
+                        <TableCell>{rate.is_manual ? `Manual (${rate.manual_updated_by || "N/A"})` : "API"}</TableCell>
                         <TableCell className="text-right">
                           <Button
-                            variant="outline"
+                            variant="ghost"
                             size="sm"
-                            onClick={() => handleSaveRate(rate.target_currency)}
-                            disabled={
-                              isNaN(Number.parseFloat(newRates[rate.target_currency])) ||
-                              Number.parseFloat(newRates[rate.target_currency]) <= 0 ||
-                              Number.parseFloat(newRates[rate.target_currency]) === rate.rate
-                            }
+                            onClick={() => {
+                              setSelectedCurrency(rate.target_currency)
+                              setNewRateValue(rate.rate.toString())
+                            }}
                           >
-                            <Save className="h-4 w-4 mr-2" /> Save
+                            Edit
                           </Button>
                         </TableCell>
                       </TableRow>
-                    ))
+                    ))}
+                  {rates.filter((rate) => rate.target_currency !== "USD").length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={5} className="h-24 text-center">
+                        No exchange rates available.
+                      </TableCell>
+                    </TableRow>
                   )}
                 </TableBody>
               </Table>
             </div>
-          </TabsContent>
 
-          <TabsContent value="history" className="flex-1 flex flex-col overflow-hidden">
-            <div className="flex items-center gap-2 mb-4">
-              <History className="h-5 w-5 text-gray-600" />
-              <h3 className="text-lg font-semibold">Exchange Rate History</h3>
+            <div className="mt-6 space-y-4">
+              <h4 className="text-md font-semibold">Manually Update Rate</h4>
+              <div className="flex items-end gap-2">
+                <div className="grid gap-1.5">
+                  <Label htmlFor="currency-select">Currency</Label>
+                  <select
+                    id="currency-select"
+                    value={selectedCurrency}
+                    onChange={(e) => setSelectedCurrency(e.target.value)}
+                    className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {supportedCurrencies.map((currency) => (
+                      <option key={currency} value={currency}>
+                        {getCurrencyFlag(currency)} {currency}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="grid gap-1.5 flex-1">
+                  <Label htmlFor="new-rate">New Rate (1 USD = X {selectedCurrency})</Label>
+                  <Input
+                    id="new-rate"
+                    type="number"
+                    step="0.0001"
+                    placeholder="e.g., 0.92"
+                    value={newRateValue}
+                    onChange={(e) => setNewRateValue(e.target.value)}
+                  />
+                </div>
+                <Button onClick={handleUpdateRate} disabled={!newRateValue || isNaN(Number.parseFloat(newRateValue))}>
+                  <Save className="mr-2 h-4 w-4" /> Save
+                </Button>
+              </div>
             </div>
-            <div className="flex-1 overflow-auto border rounded-md">
+          </TabsContent>
+          <TabsContent value="history" className="mt-4">
+            <h3 className="text-lg font-semibold mb-4">Exchange Rate History</h3>
+            <div className="rounded-md border">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Date</TableHead>
-                    <TableHead>Currency Pair</TableHead>
+                    <TableHead>Base</TableHead>
+                    <TableHead>Target</TableHead>
                     <TableHead>Old Rate</TableHead>
                     <TableHead>New Rate</TableHead>
                     <TableHead>Change Type</TableHead>
                     <TableHead>Updated By</TableHead>
+                    <TableHead>Date</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {history.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={6} className="text-center py-8">
-                        No history available.
-                      </TableCell>
-                    </TableRow>
-                  ) : (
+                  {history.length > 0 ? (
                     history.map((entry) => (
                       <TableRow key={entry.id}>
-                        <TableCell>{format(new Date(entry.created_at), "MMM dd, yyyy HH:mm")}</TableCell>
-                        <TableCell>
-                          {entry.base_currency}/{entry.target_currency}
-                        </TableCell>
+                        <TableCell>{entry.base_currency}</TableCell>
+                        <TableCell>{entry.target_currency}</TableCell>
                         <TableCell>{entry.old_rate.toFixed(4)}</TableCell>
                         <TableCell>{entry.new_rate.toFixed(4)}</TableCell>
                         <TableCell>{entry.change_type.replace(/_/g, " ")}</TableCell>
-                        <TableCell>{entry.updated_by || "N/A"}</TableCell>
+                        <TableCell>{entry.updated_by || "System"}</TableCell>
+                        <TableCell>
+                          {new Date(entry.created_at).toLocaleDateString()}{" "}
+                          {new Date(entry.created_at).toLocaleTimeString()}
+                        </TableCell>
                       </TableRow>
                     ))
+                  ) : (
+                    <TableRow>
+                      <TableCell colSpan={7} className="h-24 text-center">
+                        No history available.
+                      </TableCell>
+                    </TableRow>
                   )}
                 </TableBody>
               </Table>
             </div>
           </TabsContent>
         </Tabs>
+        <div className="flex justify-end mt-4">
+          <Button variant="outline" onClick={onClose}>
+            <X className="mr-2 h-4 w-4" /> Close
+          </Button>
+        </div>
       </DialogContent>
     </Dialog>
   )

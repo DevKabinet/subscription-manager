@@ -3,609 +3,545 @@
 import type React from "react"
 
 import { useState, useEffect } from "react"
-import { useRouter } from "next/navigation"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Plus, CreditCard, DollarSign, Calendar, User } from "lucide-react"
-import { useExchangeRateStore } from "@/lib/exchange-rates"
+import { Search, Plus, Edit, Trash2, Eye } from "lucide-react"
+import { Badge } from "@/components/ui/badge"
+import { format } from "date-fns"
+import { CalendarIcon } from "lucide-react"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Calendar } from "@/components/ui/calendar"
+import { cn } from "@/lib/utils"
 
-interface Payment {
-  id: number
-  clientName: string
-  amount: number
-  originalAmount: number
-  currency: string
-  exchangeRate: number
-  paymentMethod: "cash" | "check" | "bank_transfer" | "credit_card"
-  paymentDate: string
-  invoiceNumber?: string
-  notes?: string
-  status: "completed" | "pending" | "failed"
+interface PaymentHistoryEntry {
+  status: string
+  timestamp: string
+  notes: string
 }
 
-interface Client {
-  id: number
-  name: string
-  email: string
+interface Payment {
+  id: string
+  invoiceId: string
+  invoiceNumber: string
+  clientName: string
+  amount: number
+  currency: string
+  paymentDate: string
+  paymentMethod?: string
+  transactionId?: string
+  status: "completed" | "failed" | "refunded" | "pending"
+  referenceNumber?: string
+  fees: number
+  notes?: string
+  paymentGateway?: string
+  statusHistory: PaymentHistoryEntry[]
 }
 
 export default function PaymentsPage() {
-  const router = useRouter()
-  const { convertAmount, getRate, getCurrencyFlag, getSupportedCurrencies } = useExchangeRateStore()
-
   const [payments, setPayments] = useState<Payment[]>([])
-  const [selectedClient, setSelectedClient] = useState<string>("all")
-  const [selectedCurrency, setSelectedCurrency] = useState<string>("all")
-  const [selectedStatus, setSelectedStatus] = useState<string>("all")
-  const [isRecordModalOpen, setIsRecordModalOpen] = useState(false)
-  const [clients, setClients] = useState<Client[]>([])
-  const [formData, setFormData] = useState({
-    clientId: "",
-    amount: "",
-    currency: "USD",
-    paymentMethod: "cash" as const,
-    paymentDate: new Date().toISOString().split("T")[0],
-    invoiceNumber: "",
-    notes: "",
-  })
-  const [isRecording, setIsRecording] = useState(false)
+  const [searchTerm, setSearchTerm] = useState("")
+  const [isModalOpen, setIsModalOpen] = useState(false)
+  const [isViewModalOpen, setIsViewModalOpen] = useState(false)
+  const [currentPayment, setCurrentPayment] = useState<Payment | null>(null)
+  const [isEditing, setIsEditing] = useState(false)
+  const [paymentDate, setPaymentDate] = useState<Date | undefined>(undefined)
 
   useEffect(() => {
-    const isAuthenticated = localStorage.getItem("isAuthenticated")
-    if (!isAuthenticated) {
-      router.push("/login")
-      return
-    }
-
-    loadData()
-  }, [router])
-
-  const loadData = () => {
-    // Load clients
-    setClients([
-      { id: 1, name: "John Doe", email: "john@example.com" },
-      { id: 2, name: "Jane Smith", email: "jane@example.com" },
-      { id: 3, name: "Alice Johnson", email: "alice@example.com" },
-      { id: 4, name: "Bob Wilson", email: "bob@example.com" },
-    ])
-
-    // Load existing mock payments with multi-currency support
-    const mockPayments: Payment[] = [
+    // Simulate fetching data
+    const fetchedPayments: Payment[] = [
       {
-        id: 1,
-        clientName: "John Doe",
-        amount: 29.99,
-        originalAmount: 29.99,
-        currency: "USD",
-        exchangeRate: 1.0,
-        paymentMethod: "credit_card",
-        paymentDate: "2024-01-15",
-        invoiceNumber: "INV-2024-001",
-        status: "completed",
-      },
-      {
-        id: 2,
-        clientName: "Jane Smith",
-        amount: 2714.28,
-        originalAmount: 152.982,
-        currency: "SRD",
-        exchangeRate: 17.74,
-        paymentMethod: "bank_transfer",
-        paymentDate: "2024-01-20",
-        invoiceNumber: "INV-2024-002",
-        status: "completed",
-      },
-      {
-        id: 3,
-        clientName: "Alice Johnson",
+        id: "pay1",
+        invoiceId: "inv1",
+        invoiceNumber: "INV-2023-001",
+        clientName: "Alice Smith",
         amount: 500.0,
-        originalAmount: 500.0,
         currency: "USD",
-        exchangeRate: 1.0,
-        paymentMethod: "cash",
-        paymentDate: "2024-01-25",
-        notes: "Partial payment for services",
+        paymentDate: "2023-01-01T10:30:00Z",
+        paymentMethod: "Credit Card",
+        transactionId: "TXN-001",
         status: "completed",
+        fees: 15.0,
+        notes: "Payment for Q1 Enterprise subscription.",
+        paymentGateway: "Stripe",
+        statusHistory: [
+          { status: "pending", timestamp: "2023-01-01T10:00:00Z", notes: "Initial status" },
+          { status: "completed", timestamp: "2023-01-01T10:30:00Z", notes: "Payment processed" },
+        ],
+      },
+      {
+        id: "pay2",
+        invoiceId: "inv3",
+        invoiceNumber: "INV-2023-003",
+        clientName: "Charlie Brown",
+        amount: 50.0,
+        currency: "GBP",
+        paymentDate: "2023-03-01T14:00:00Z",
+        paymentMethod: "Bank Transfer",
+        transactionId: "TXN-002",
+        status: "completed",
+        fees: 0.0,
+        notes: "Annual basic plan payment.",
+        paymentGateway: "PayPal",
+        statusHistory: [
+          { status: "pending", timestamp: "2023-03-01T13:00:00Z", notes: "Initial status" },
+          { status: "completed", timestamp: "2023-03-01T14:00:00Z", notes: "Payment received" },
+        ],
+      },
+      {
+        id: "pay3",
+        invoiceId: "inv2",
+        invoiceNumber: "INV-2023-002",
+        clientName: "Bob Johnson",
+        amount: 100.0,
+        currency: "USD",
+        paymentDate: "2023-02-15T09:00:00Z",
+        paymentMethod: "Credit Card",
+        transactionId: "TXN-003",
+        status: "pending",
+        fees: 0.0,
+        notes: "Monthly Pro plan payment.",
+        paymentGateway: "Stripe",
+        statusHistory: [{ status: "pending", timestamp: "2023-02-15T09:00:00Z", notes: "Initial status" }],
+      },
+      {
+        id: "pay4",
+        invoiceId: "inv4",
+        invoiceNumber: "INV-2024-004",
+        clientName: "Alice Smith",
+        amount: 189.0,
+        currency: "USD",
+        paymentDate: "2024-07-01T11:00:00Z",
+        paymentMethod: "Credit Card",
+        transactionId: "TXN-004",
+        status: "failed",
+        fees: 0.0,
+        notes: "Payment failed due to insufficient funds.",
+        paymentGateway: "Stripe",
+        statusHistory: [
+          { status: "pending", timestamp: "2024-07-01T10:50:00Z", notes: "Initial status" },
+          { status: "failed", timestamp: "2024-07-01T11:00:00Z", notes: "Payment failed" },
+        ],
       },
     ]
+    setPayments(fetchedPayments)
+  }, [])
 
-    setPayments(mockPayments)
-  }
+  const filteredPayments = payments.filter(
+    (payment) =>
+      payment.invoiceNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      payment.clientName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      payment.status.toLowerCase().includes(searchTerm.toLowerCase()),
+  )
 
-  const handleRecordPayment = () => {
-    setFormData({
-      clientId: "",
-      amount: "",
-      currency: "USD",
-      paymentMethod: "cash",
-      paymentDate: new Date().toISOString().split("T")[0],
-      invoiceNumber: "",
-      notes: "",
-    })
-    setIsRecordModalOpen(true)
-  }
+  const handleAddOrEditPayment = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    const formData = new FormData(event.currentTarget)
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!formData.amount || Number.parseFloat(formData.amount) <= 0) {
-      alert("Please enter a valid amount")
-      return
+    const newStatus = formData.get("status") as Payment["status"]
+    const currentStatusHistory = isEditing && currentPayment ? [...currentPayment.statusHistory] : []
+
+    if (isEditing && currentPayment && newStatus !== currentPayment.status) {
+      currentStatusHistory.push({
+        status: newStatus,
+        timestamp: new Date().toISOString(),
+        notes: `Status changed to ${newStatus}`,
+      })
+    } else if (!isEditing) {
+      currentStatusHistory.push({
+        status: newStatus,
+        timestamp: new Date().toISOString(),
+        notes: "Initial status",
+      })
     }
 
-    setIsRecording(true)
-
-    const selectedClient = clients.find((c) => c.id === Number.parseInt(formData.clientId))
-    if (!selectedClient) {
-      alert("Please select a client")
-      setIsRecording(false)
-      return
+    const newOrUpdatedPayment: Payment = {
+      id: isEditing && currentPayment ? currentPayment.id : `pay${Date.now()}`, // Simple ID generation
+      invoiceId: formData.get("invoiceId") as string,
+      invoiceNumber: formData.get("invoiceNumber") as string,
+      clientName: formData.get("clientName") as string,
+      amount: Number.parseFloat(formData.get("amount") as string),
+      currency: formData.get("currency") as string,
+      paymentDate: paymentDate ? paymentDate.toISOString() : new Date().toISOString(),
+      paymentMethod: formData.get("paymentMethod") as string,
+      transactionId: formData.get("transactionId") as string,
+      status: newStatus,
+      referenceNumber: formData.get("referenceNumber") as string,
+      fees: Number.parseFloat(formData.get("fees") as string) || 0,
+      notes: formData.get("notes") as string,
+      paymentGateway: formData.get("paymentGateway") as string,
+      statusHistory: currentStatusHistory,
     }
 
-    const amount = Number.parseFloat(formData.amount)
-    const originalAmount = convertAmount(amount, formData.currency, "USD")
-    const exchangeRate = getRate("USD", formData.currency)
-
-    // Create new payment record
-    const newPayment: Payment = {
-      id: Date.now(),
-      clientName: selectedClient.name,
-      amount: amount,
-      originalAmount: originalAmount,
-      currency: formData.currency,
-      exchangeRate: exchangeRate,
-      paymentMethod: formData.paymentMethod,
-      paymentDate: formData.paymentDate,
-      invoiceNumber: formData.invoiceNumber || undefined,
-      notes: formData.notes || undefined,
-      status: "completed",
+    if (isEditing) {
+      setPayments(payments.map((pay) => (pay.id === newOrUpdatedPayment.id ? newOrUpdatedPayment : pay)))
+    } else {
+      setPayments([...payments, newOrUpdatedPayment])
     }
-
-    setPayments([...payments, newPayment])
-
-    setIsRecording(false)
-    setIsRecordModalOpen(false)
-
-    // Show success message
-    alert(
-      `Payment of ${getCurrencyFlag(formData.currency)} ${amount.toFixed(2)} ${formData.currency} recorded successfully!`,
-    )
+    setIsModalOpen(false)
+    resetFormState()
   }
 
-  const filteredPayments = payments.filter((payment) => {
-    const clientMatch = selectedClient === "all" || payment.clientName === selectedClient
-    const currencyMatch = selectedCurrency === "all" || payment.currency === selectedCurrency
-    const statusMatch = selectedStatus === "all" || payment.status === selectedStatus
-    return clientMatch && currencyMatch && statusMatch
-  })
+  const handleDeletePayment = (id: string) => {
+    setPayments(payments.filter((payment) => payment.id !== id))
+  }
 
-  const getStatusBadge = (status: string) => {
+  const openAddModal = () => {
+    setCurrentPayment(null)
+    setIsEditing(false)
+    resetFormState()
+    setIsModalOpen(true)
+  }
+
+  const openEditModal = (payment: Payment) => {
+    setCurrentPayment(payment)
+    setIsEditing(true)
+    setPaymentDate(payment.paymentDate ? new Date(payment.paymentDate) : undefined)
+    setIsModalOpen(true)
+  }
+
+  const openViewModal = (payment: Payment) => {
+    setCurrentPayment(payment)
+    setIsViewModalOpen(true)
+  }
+
+  const resetFormState = () => {
+    setPaymentDate(undefined)
+  }
+
+  const getStatusBadgeColor = (status: Payment["status"]) => {
     switch (status) {
       case "completed":
-        return <Badge className="bg-green-500 text-green-100 hover:bg-green-600">Completed</Badge>
+        return "bg-green-100 text-green-800"
       case "pending":
-        return <Badge variant="secondary">Pending</Badge>
+        return "bg-yellow-100 text-yellow-800"
       case "failed":
-        return <Badge variant="destructive">Failed</Badge>
+        return "bg-red-100 text-red-800"
+      case "refunded":
+        return "bg-blue-100 text-blue-800"
       default:
-        return <Badge variant="outline">{status}</Badge>
+        return "bg-gray-100 text-gray-800"
     }
-  }
-
-  const getPaymentMethodIcon = (method: string) => {
-    switch (method) {
-      case "credit_card":
-        return <CreditCard className="h-4 w-4" />
-      case "cash":
-        return <DollarSign className="h-4 w-4" />
-      case "check":
-        return <Calendar className="h-4 w-4" />
-      case "bank_transfer":
-        return <User className="h-4 w-4" />
-      default:
-        return <DollarSign className="h-4 w-4" />
-    }
-  }
-
-  const getPaymentMethodLabel = (method: string) => {
-    switch (method) {
-      case "credit_card":
-        return "Credit Card"
-      case "cash":
-        return "Cash"
-      case "check":
-        return "Check"
-      case "bank_transfer":
-        return "Bank Transfer"
-      default:
-        return method
-    }
-  }
-
-  const getTotalPayments = () => {
-    return filteredPayments.reduce((sum, payment) => sum + payment.originalAmount, 0)
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Multi-Currency Payments</h1>
-          <p className="text-gray-600">Record and manage payments in multiple currencies</p>
-        </div>
-        <Button className="bg-green-500 text-white" onClick={handleRecordPayment}>
-          <Plus className="h-4 w-4 mr-2" />
-          Record Payment
+    <div className="container mx-auto py-8">
+      <div className="flex justify-between items-center mb-6">
+        <h1 className="text-3xl font-bold text-gray-900">Payments</h1>
+        <Button onClick={openAddModal}>
+          <Plus className="mr-2 h-4 w-4" /> Record Payment
         </Button>
       </div>
 
-      {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-gray-600">Total Payments</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">🇺🇸 ${getTotalPayments().toFixed(2)}</div>
-            <p className="text-xs text-gray-500">USD equivalent</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-gray-600">This Month</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{filteredPayments.length}</div>
-            <p className="text-xs text-gray-500">Payments recorded</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-gray-600">Currencies</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{new Set(filteredPayments.map((p) => p.currency)).size}</div>
-            <p className="text-xs text-gray-500">Different currencies</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-gray-600">Completed</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-green-600">
-              {filteredPayments.filter((p) => p.status === "completed").length}
-            </div>
-            <p className="text-xs text-gray-500">Successful payments</p>
-          </CardContent>
-        </Card>
+      <div className="relative mb-6">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500" />
+        <Input
+          placeholder="Search payments..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className="pl-9 pr-4 py-2 border rounded-md w-full"
+        />
       </div>
 
-      {/* Filters */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Filters</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex gap-4">
-            <div className="flex-1">
-              <Select value={selectedClient} onValueChange={setSelectedClient}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Filter by client" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Clients</SelectItem>
-                  {clients.map((client) => (
-                    <SelectItem key={client.id} value={client.name}>
-                      {client.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="flex-1">
-              <Select value={selectedCurrency} onValueChange={setSelectedCurrency}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Filter by currency" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Currencies</SelectItem>
-                  {getSupportedCurrencies().map((currency) => (
-                    <SelectItem key={currency} value={currency}>
-                      {getCurrencyFlag(currency)} {currency}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="flex-1">
-              <Select value={selectedStatus} onValueChange={setSelectedStatus}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Filter by status" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Statuses</SelectItem>
-                  <SelectItem value="completed">Completed</SelectItem>
-                  <SelectItem value="pending">Pending</SelectItem>
-                  <SelectItem value="failed">Failed</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Payment History</CardTitle>
-          <CardDescription>Track all payments received in multiple currencies</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Client</TableHead>
-                <TableHead>Amount</TableHead>
-                <TableHead>Currency</TableHead>
-                <TableHead>USD Equivalent</TableHead>
-                <TableHead>Method</TableHead>
-                <TableHead>Date</TableHead>
-                <TableHead>Invoice</TableHead>
-                <TableHead>Status</TableHead>
+      <div className="rounded-md border overflow-hidden">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Invoice #</TableHead>
+              <TableHead>Client</TableHead>
+              <TableHead>Amount</TableHead>
+              <TableHead className="hidden md:table-cell">Payment Date</TableHead>
+              <TableHead className="hidden sm:table-cell">Method</TableHead>
+              <TableHead className="hidden sm:table-cell">Status</TableHead>
+              <TableHead className="text-right">Actions</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {filteredPayments.map((payment) => (
+              <TableRow key={payment.id}>
+                <TableCell className="font-medium">{payment.invoiceNumber}</TableCell>
+                <TableCell>{payment.clientName}</TableCell>
+                <TableCell>
+                  {payment.currency} {payment.amount.toFixed(2)}
+                </TableCell>
+                <TableCell className="hidden md:table-cell">{format(new Date(payment.paymentDate), "PPP")}</TableCell>
+                <TableCell className="hidden sm:table-cell">{payment.paymentMethod || "N/A"}</TableCell>
+                <TableCell className="hidden sm:table-cell">
+                  <Badge className={getStatusBadgeColor(payment.status)}>{payment.status}</Badge>
+                </TableCell>
+                <TableCell className="text-right">
+                  <Button variant="ghost" size="sm" onClick={() => openViewModal(payment)} className="mr-1">
+                    <Eye className="h-4 w-4" />
+                    <span className="sr-only">View</span>
+                  </Button>
+                  <Button variant="ghost" size="sm" onClick={() => openEditModal(payment)} className="mr-1">
+                    <Edit className="h-4 w-4" />
+                    <span className="sr-only">Edit</span>
+                  </Button>
+                  <Button variant="ghost" size="sm" onClick={() => handleDeletePayment(payment.id)}>
+                    <Trash2 className="h-4 w-4 text-red-500" />
+                    <span className="sr-only">Delete</span>
+                  </Button>
+                </TableCell>
               </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredPayments.map((payment) => (
-                <TableRow key={payment.id}>
-                  <TableCell className="font-medium">{payment.clientName}</TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-1">
-                      {getCurrencyFlag(payment.currency)}
-                      {payment.amount.toFixed(2)}
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant="outline" className="flex items-center gap-1 w-fit">
-                      {getCurrencyFlag(payment.currency)}
-                      {payment.currency}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-sm text-gray-600">
-                    {payment.currency !== "USD" ? (
-                      <div>
-                        <div>🇺🇸 ${payment.originalAmount.toFixed(2)}</div>
-                        <div className="text-xs">Rate: {payment.exchangeRate.toFixed(4)}</div>
-                      </div>
-                    ) : (
-                      "🇺🇸 " + payment.amount.toFixed(2)
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-2">
-                      {getPaymentMethodIcon(payment.paymentMethod)}
-                      <span className="text-sm">{getPaymentMethodLabel(payment.paymentMethod)}</span>
-                    </div>
-                  </TableCell>
-                  <TableCell>{new Date(payment.paymentDate).toLocaleDateString()}</TableCell>
-                  <TableCell>
-                    {payment.invoiceNumber ? (
-                      <Badge variant="outline" className="text-xs">
-                        {payment.invoiceNumber}
-                      </Badge>
-                    ) : (
-                      <span className="text-gray-400 text-sm">-</span>
-                    )}
-                  </TableCell>
-                  <TableCell>{getStatusBadge(payment.status)}</TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+            ))}
+            {filteredPayments.length === 0 && (
+              <TableRow>
+                <TableCell colSpan={7} className="text-center py-4">
+                  No payments found.
+                </TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
+      </div>
 
-      {/* Record Payment Modal */}
-      <Dialog open={isRecordModalOpen} onOpenChange={setIsRecordModalOpen}>
-        <DialogContent className="max-w-2xl">
+      {/* Add/Edit Payment Modal */}
+      <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
+        <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <CreditCard className="h-5 w-5 text-green-500" />
-              Record Multi-Currency Payment
-            </DialogTitle>
-            <DialogDescription>Record a payment received from a client in any supported currency</DialogDescription>
+            <DialogTitle>{isEditing ? "Edit Payment" : "Record New Payment"}</DialogTitle>
           </DialogHeader>
-          <form onSubmit={handleSubmit} className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="client">Select Client</Label>
-                <Select
-                  value={formData.clientId}
-                  onValueChange={(value) => setFormData({ ...formData, clientId: value })}
-                  required
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Choose a client" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {clients.map((client) => (
-                      <SelectItem key={client.id} value={client.id.toString()}>
-                        {client.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="currency">Payment Currency</Label>
-                <Select
-                  value={formData.currency}
-                  onValueChange={(value) => setFormData({ ...formData, currency: value })}
-                  required
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {getSupportedCurrencies().map((currency) => (
-                      <SelectItem key={currency} value={currency}>
-                        <span className="flex items-center gap-2">
-                          {getCurrencyFlag(currency)} {currency}
-                          {currency !== "USD" && (
-                            <span className="text-xs text-gray-500">
-                              (1 USD = {getRate("USD", currency).toFixed(4)} {currency})
-                            </span>
-                          )}
-                        </span>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+          <form onSubmit={handleAddOrEditPayment} className="grid gap-4 py-4">
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="invoiceNumber" className="text-right">
+                Invoice #
+              </Label>
+              <Input
+                id="invoiceNumber"
+                name="invoiceNumber"
+                defaultValue={currentPayment?.invoiceNumber || ""}
+                className="col-span-3"
+                required
+              />
+              <input type="hidden" name="invoiceId" defaultValue={currentPayment?.invoiceId || "new-invoice-id"} />
             </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="amount">Amount Received</Label>
-                <Input
-                  id="amount"
-                  type="number"
-                  step="0.01"
-                  value={formData.amount}
-                  onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
-                  placeholder={`Enter amount in ${formData.currency}`}
-                  required
-                />
-                {formData.amount && formData.currency !== "USD" && (
-                  <p className="text-xs text-gray-500">
-                    USD Equivalent: $
-                    {convertAmount(Number.parseFloat(formData.amount), formData.currency, "USD").toFixed(2)}
-                  </p>
-                )}
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="paymentMethod">Payment Method</Label>
-                <Select
-                  value={formData.paymentMethod}
-                  onValueChange={(value) => setFormData({ ...formData, paymentMethod: value as any })}
-                  required
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="cash">
-                      <div className="flex items-center gap-2">
-                        <DollarSign className="h-4 w-4" />
-                        Cash
-                      </div>
-                    </SelectItem>
-                    <SelectItem value="credit_card">
-                      <div className="flex items-center gap-2">
-                        <CreditCard className="h-4 w-4" />
-                        Credit Card
-                      </div>
-                    </SelectItem>
-                    <SelectItem value="bank_transfer">
-                      <div className="flex items-center gap-2">
-                        <User className="h-4 w-4" />
-                        Bank Transfer
-                      </div>
-                    </SelectItem>
-                    <SelectItem value="check">
-                      <div className="flex items-center gap-2">
-                        <Calendar className="h-4 w-4" />
-                        Check
-                      </div>
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="paymentDate">Payment Date</Label>
-                <Input
-                  id="paymentDate"
-                  type="date"
-                  value={formData.paymentDate}
-                  onChange={(e) => setFormData({ ...formData, paymentDate: e.target.value })}
-                  required
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="invoiceNumber">Invoice Number (Optional)</Label>
-                <Input
-                  id="invoiceNumber"
-                  value={formData.invoiceNumber}
-                  onChange={(e) => setFormData({ ...formData, invoiceNumber: e.target.value })}
-                  placeholder="e.g., INV-2024-001"
-                />
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="notes">Notes (Optional)</Label>
-              <Textarea
-                id="notes"
-                value={formData.notes}
-                onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                placeholder="Add any additional notes about this payment..."
-                rows={3}
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="clientName" className="text-right">
+                Client Name
+              </Label>
+              <Input
+                id="clientName"
+                name="clientName"
+                defaultValue={currentPayment?.clientName || ""}
+                className="col-span-3"
+                required
               />
             </div>
-
-            {/* Payment Summary */}
-            {formData.amount && (
-              <Card className="bg-green-50 border-green-200">
-                <CardContent className="p-4">
-                  <div className="flex items-center gap-2 mb-2">
-                    <CreditCard className="h-4 w-4 text-green-600" />
-                    <span className="font-medium text-green-900">Payment Summary</span>
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-                    <div>
-                      <span className="text-gray-600">Amount ({formData.currency}):</span>
-                      <div className="font-bold text-lg text-green-700">
-                        {getCurrencyFlag(formData.currency)} {Number.parseFloat(formData.amount).toFixed(2)}{" "}
-                        {formData.currency}
-                      </div>
-                    </div>
-                    {formData.currency !== "USD" && (
-                      <>
-                        <div>
-                          <span className="text-gray-600">USD Equivalent:</span>
-                          <div className="font-medium">
-                            🇺🇸 ${convertAmount(Number.parseFloat(formData.amount), formData.currency, "USD").toFixed(2)}
-                          </div>
-                        </div>
-                        <div>
-                          <span className="text-gray-600">Exchange Rate:</span>
-                          <div className="font-medium">
-                            1 USD = {getRate("USD", formData.currency).toFixed(6)} {formData.currency}
-                          </div>
-                        </div>
-                      </>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="amount" className="text-right">
+                Amount
+              </Label>
+              <Input
+                id="amount"
+                name="amount"
+                type="number"
+                step="0.01"
+                defaultValue={currentPayment?.amount || ""}
+                className="col-span-3"
+                required
+              />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="currency" className="text-right">
+                Currency
+              </Label>
+              <Input
+                id="currency"
+                name="currency"
+                defaultValue={currentPayment?.currency || "USD"}
+                className="col-span-3"
+                required
+              />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="paymentDate" className="text-right">
+                Payment Date
+              </Label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant={"outline"}
+                    className={cn(
+                      "col-span-3 justify-start text-left font-normal",
+                      !paymentDate && "text-muted-foreground",
                     )}
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-
-            <Button type="submit" className="w-full" disabled={isRecording || !formData.amount}>
-              <CreditCard className="h-4 w-4 mr-2" />
-              {isRecording ? "Recording Payment..." : "Record Payment"}
-            </Button>
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {paymentDate ? format(paymentDate, "PPP") : <span>Pick a date</span>}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar mode="single" selected={paymentDate} onSelect={setPaymentDate} initialFocus />
+                </PopoverContent>
+              </Popover>
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="paymentMethod" className="text-right">
+                Payment Method
+              </Label>
+              <Input
+                id="paymentMethod"
+                name="paymentMethod"
+                defaultValue={currentPayment?.paymentMethod || ""}
+                className="col-span-3"
+              />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="transactionId" className="text-right">
+                Transaction ID
+              </Label>
+              <Input
+                id="transactionId"
+                name="transactionId"
+                defaultValue={currentPayment?.transactionId || ""}
+                className="col-span-3"
+              />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="status" className="text-right">
+                Status
+              </Label>
+              <select
+                id="status"
+                name="status"
+                defaultValue={currentPayment?.status || "pending"}
+                className="col-span-3 flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <option value="completed">Completed</option>
+                <option value="pending">Pending</option>
+                <option value="failed">Failed</option>
+                <option value="refunded">Refunded</option>
+              </select>
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="referenceNumber" className="text-right">
+                Reference Number
+              </Label>
+              <Input
+                id="referenceNumber"
+                name="referenceNumber"
+                defaultValue={currentPayment?.referenceNumber || ""}
+                className="col-span-3"
+              />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="fees" className="text-right">
+                Fees
+              </Label>
+              <Input
+                id="fees"
+                name="fees"
+                type="number"
+                step="0.01"
+                defaultValue={currentPayment?.fees || 0}
+                className="col-span-3"
+              />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="paymentGateway" className="text-right">
+                Payment Gateway
+              </Label>
+              <Input
+                id="paymentGateway"
+                name="paymentGateway"
+                defaultValue={currentPayment?.paymentGateway || ""}
+                className="col-span-3"
+              />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="notes" className="text-right">
+                Notes
+              </Label>
+              <Input id="notes" name="notes" defaultValue={currentPayment?.notes || ""} className="col-span-3" />
+            </div>
+            <DialogFooter>
+              <Button type="submit">{isEditing ? "Save Changes" : "Record Payment"}</Button>
+            </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* View Payment Modal */}
+      <Dialog open={isViewModalOpen} onOpenChange={setIsViewModalOpen}>
+        <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Payment Details</DialogTitle>
+          </DialogHeader>
+          {currentPayment && (
+            <div className="grid gap-4 py-4">
+              <div className="grid grid-cols-2 gap-1">
+                <span className="font-medium">Invoice #:</span>
+                <span>{currentPayment.invoiceNumber}</span>
+              </div>
+              <div className="grid grid-cols-2 gap-1">
+                <span className="font-medium">Client Name:</span>
+                <span>{currentPayment.clientName}</span>
+              </div>
+              <div className="grid grid-cols-2 gap-1">
+                <span className="font-medium">Amount:</span>
+                <span>
+                  {currentPayment.currency} {currentPayment.amount.toFixed(2)}
+                </span>
+              </div>
+              <div className="grid grid-cols-2 gap-1">
+                <span className="font-medium">Payment Date:</span>
+                <span>{format(new Date(currentPayment.paymentDate), "PPP p")}</span>
+              </div>
+              <div className="grid grid-cols-2 gap-1">
+                <span className="font-medium">Payment Method:</span>
+                <span>{currentPayment.paymentMethod || "N/A"}</span>
+              </div>
+              <div className="grid grid-cols-2 gap-1">
+                <span className="font-medium">Transaction ID:</span>
+                <span>{currentPayment.transactionId || "N/A"}</span>
+              </div>
+              <div className="grid grid-cols-2 gap-1">
+                <span className="font-medium">Status:</span>
+                <span>
+                  <Badge className={getStatusBadgeColor(currentPayment.status)}>{currentPayment.status}</Badge>
+                </span>
+              </div>
+              <div className="grid grid-cols-2 gap-1">
+                <span className="font-medium">Reference Number:</span>
+                <span>{currentPayment.referenceNumber || "N/A"}</span>
+              </div>
+              <div className="grid grid-cols-2 gap-1">
+                <span className="font-medium">Fees:</span>
+                <span>
+                  {currentPayment.currency} {currentPayment.fees.toFixed(2)}
+                </span>
+              </div>
+              <div className="grid grid-cols-2 gap-1">
+                <span className="font-medium">Payment Gateway:</span>
+                <span>{currentPayment.paymentGateway || "N/A"}</span>
+              </div>
+              <div className="grid grid-cols-2 gap-1">
+                <span className="font-medium">Notes:</span>
+                <span>{currentPayment.notes || "N/A"}</span>
+              </div>
+              <div className="mt-4">
+                <h4 className="font-semibold mb-2">Status History:</h4>
+                {currentPayment.statusHistory.length > 0 ? (
+                  <ul className="list-disc pl-5 text-sm">
+                    {currentPayment.statusHistory.map((entry, index) => (
+                      <li key={index}>
+                        <span className="font-medium capitalize">{entry.status}</span> on{" "}
+                        {format(new Date(entry.timestamp), "PPP p")} - {entry.notes}
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="text-sm text-gray-500">No status history available.</p>
+                )}
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button onClick={() => setIsViewModalOpen(false)}>Close</Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

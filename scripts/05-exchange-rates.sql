@@ -1,34 +1,35 @@
--- Create exchange_rates table
 CREATE TABLE IF NOT EXISTS exchange_rates (
-  id SERIAL PRIMARY KEY,
-  base_currency VARCHAR(3) NOT NULL DEFAULT 'USD',
-  target_currency VARCHAR(3) NOT NULL,
-  rate DECIMAL(10,6) NOT NULL,
-  last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  is_manual BOOLEAN DEFAULT FALSE,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    base_currency VARCHAR(10) NOT NULL,
+    target_currency VARCHAR(10) NOT NULL,
+    rate DECIMAL(18, 8) NOT NULL,
+    last_updated TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    is_manual BOOLEAN DEFAULT FALSE,
+    manual_updated_at TIMESTAMP WITH TIME ZONE,
+    manual_updated_by VARCHAR(255),
+    PRIMARY KEY (base_currency, target_currency)
 );
 
--- Create unique index to prevent duplicate currency pairs
-CREATE UNIQUE INDEX IF NOT EXISTS idx_exchange_rates_currencies 
-ON exchange_rates(base_currency, target_currency);
-
--- Insert initial exchange rates (will be updated by API)
-INSERT INTO exchange_rates (base_currency, target_currency, rate, is_manual) 
-VALUES 
-  ('USD', 'USD', 1.000000, false),
-  ('USD', 'EUR', 0.850000, false),
-  ('USD', 'SRD', 35.500000, false)
-ON CONFLICT (base_currency, target_currency) DO NOTHING;
-
--- Create exchange_rate_history table for tracking changes
 CREATE TABLE IF NOT EXISTS exchange_rate_history (
-  id SERIAL PRIMARY KEY,
-  base_currency VARCHAR(3) NOT NULL,
-  target_currency VARCHAR(3) NOT NULL,
-  old_rate DECIMAL(10,6),
-  new_rate DECIMAL(10,6) NOT NULL,
-  change_type VARCHAR(20) NOT NULL, -- 'api_update', 'manual_update'
-  changed_by VARCHAR(255),
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    base_currency VARCHAR(10) NOT NULL,
+    target_currency VARCHAR(10) NOT NULL,
+    old_rate DECIMAL(18, 8) NOT NULL,
+    new_rate DECIMAL(18, 8) NOT NULL,
+    change_type VARCHAR(50) NOT NULL, -- 'manual_update', 'api_update', 'new_entry'
+    updated_by VARCHAR(255),
+    notes TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
+
+-- Seed initial exchange rates if the table is empty
+INSERT INTO exchange_rates (base_currency, target_currency, rate, is_manual) VALUES
+('USD', 'USD', 1.0, FALSE),
+('USD', 'EUR', 0.92, FALSE),
+('USD', 'GBP', 0.79, FALSE),
+('USD', 'JPY', 155.00, FALSE),
+('USD', 'CAD', 1.37, FALSE),
+('USD', 'AUD', 1.50, FALSE),
+('USD', 'CHF', 0.90, FALSE),
+('USD', 'CNY', 7.25, FALSE),
+('USD', 'INR', 83.50, FALSE)
+ON CONFLICT (base_currency, target_currency) DO NOTHING;

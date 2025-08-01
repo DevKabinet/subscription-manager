@@ -1,132 +1,249 @@
 "use client"
 
 import type React from "react"
-
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
-import { Plus, FileText, Unlink, Edit } from "lucide-react"
+import { Plus, Edit, Trash2, Eye } from "lucide-react"
 import jsPDF from "jspdf"
+import { format } from "date-fns"
+import { CalendarIcon } from "lucide-react"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Calendar } from "@/components/ui/calendar"
+import { cn } from "@/lib/utils"
 
 interface Client {
-  id: number
+  id: string
   name: string
   email: string
-  address: string
 }
 
 interface Subscription {
-  id: number
-  name: string
-  price: number
-  billingCycle: string
-}
-
-interface ClientSubscription {
-  id: number
-  clientId: number
-  subscriptionId: number
-  clientName: string
-  subscriptionName: string
-  price: number
+  id: string
+  clientId: string
+  planName: string
+  amount: number
+  currency: string
+  billingCycle: "monthly" | "annually" | "quarterly"
   startDate: string
   endDate?: string
-  status: "active" | "paused" | "cancelled" | "expired"
-  invoiceNumber?: string
+  nextBillingDate?: string
+  status: "active" | "cancelled" | "paused" | "trialing" | "expired"
+  autoRenew: boolean
+  cancellationDate?: string
+  cancellationReason?: string
+  paymentMethodDetails?: string
+}
+
+interface ClientSubscription extends Client {
+  subscriptions: Subscription[]
 }
 
 export default function ClientSubscriptionsPage() {
-  const [clients, setClients] = useState<Client[]>([])
-  const [subscriptions, setSubscriptions] = useState<Subscription[]>([])
   const [clientSubscriptions, setClientSubscriptions] = useState<ClientSubscription[]>([])
-  const [isDialogOpen, setIsDialogOpen] = useState(false)
-  const [isStatusDialogOpen, setIsStatusDialogOpen] = useState(false)
-  const [editingSubscription, setEditingSubscription] = useState<ClientSubscription | null>(null)
-  const [formData, setFormData] = useState({
-    clientId: "",
-    subscriptionId: "",
-    startDate: new Date().toISOString().split("T")[0],
-  })
-  const [statusForm, setStatusForm] = useState({
-    status: "active" as ClientSubscription["status"],
-    endDate: "",
-  })
+  const [searchTerm, setSearchTerm] = useState("")
+  const [isModalOpen, setIsModalOpen] = useState(false)
+  const [isViewModalOpen, setIsViewModalOpen] = useState(false)
+  const [currentClientSubscription, setCurrentClientSubscription] = useState<ClientSubscription | null>(null)
+  const [isEditing, setIsEditing] = useState(false)
+  const [startDate, setStartDate] = useState<Date | undefined>(undefined)
+  const [endDate, setEndDate] = useState<Date | undefined>(undefined)
+  const [nextBillingDate, setNextBillingDate] = useState<Date | undefined>(undefined)
+  const [cancellationDate, setCancellationDate] = useState<Date | undefined>(undefined)
 
   useEffect(() => {
-    // Load clients
-    setClients([
-      { id: 1, name: "John Doe", email: "john@example.com", address: "456 Client Ave, City, State 12345" },
-      { id: 2, name: "Jane Smith", email: "jane@example.com", address: "789 Customer Blvd, City, State 12345" },
-      { id: 3, name: "Alice Johnson", email: "alice@example.com", address: "321 Business St, City, State 12345" },
-      { id: 4, name: "Bob Wilson", email: "bob@example.com", address: "654 Commerce Ave, City, State 12345" },
-    ])
-
-    // Load subscriptions
-    setSubscriptions([
-      { id: 1, name: "Basic Plan", price: 29.99, billingCycle: "monthly" },
-      { id: 2, name: "Premium Plan", price: 59.99, billingCycle: "monthly" },
-      { id: 3, name: "Enterprise Plan", price: 99.99, billingCycle: "monthly" },
-    ])
-
-    // Load existing client subscriptions
-    setClientSubscriptions([
+    // Simulate fetching data
+    const fetchedData: ClientSubscription[] = [
       {
-        id: 1,
-        clientId: 1,
-        subscriptionId: 1,
-        clientName: "John Doe",
-        subscriptionName: "Basic Plan",
-        price: 29.99,
-        startDate: "2024-01-01",
-        status: "active",
-        invoiceNumber: "INV-2024-001",
+        id: "client1",
+        name: "Alice Smith",
+        email: "alice@example.com",
+        subscriptions: [
+          {
+            id: "sub1",
+            clientId: "client1",
+            planName: "Premium Monthly",
+            amount: 99.99,
+            currency: "USD",
+            billingCycle: "monthly",
+            startDate: "2023-01-01",
+            nextBillingDate: "2024-08-01",
+            status: "active",
+            autoRenew: true,
+          },
+          {
+            id: "sub4",
+            clientId: "client1",
+            planName: "Trial Plan",
+            amount: 0.0,
+            currency: "USD",
+            billingCycle: "monthly",
+            startDate: "2024-07-10",
+            endDate: "2024-07-24",
+            status: "trialing",
+            autoRenew: true,
+          },
+        ],
       },
       {
-        id: 2,
-        clientId: 2,
-        subscriptionId: 2,
-        clientName: "Jane Smith",
-        subscriptionName: "Premium Plan",
-        price: 59.99,
-        startDate: "2024-01-05",
-        status: "cancelled",
-        endDate: "2024-02-05",
-        invoiceNumber: "INV-2024-002",
+        id: "client2",
+        name: "Bob Johnson",
+        email: "bob@example.com",
+        subscriptions: [
+          {
+            id: "sub2",
+            clientId: "client2",
+            planName: "Annual Pro",
+            amount: 999.0,
+            currency: "USD",
+            billingCycle: "annually",
+            startDate: "2023-03-15",
+            endDate: "2024-03-14",
+            nextBillingDate: "2025-03-15",
+            status: "active",
+            autoRenew: true,
+          },
+        ],
       },
       {
-        id: 3,
-        clientId: 3,
-        subscriptionId: 1,
-        clientName: "Alice Johnson",
-        subscriptionName: "Basic Plan",
-        price: 29.99,
-        startDate: "2024-01-10",
-        status: "paused",
-        invoiceNumber: "INV-2024-003",
+        id: "client3",
+        name: "Charlie Brown",
+        email: "charlie@example.com",
+        subscriptions: [
+          {
+            id: "sub3",
+            clientId: "client3",
+            planName: "Basic Monthly",
+            amount: 29.99,
+            currency: "USD",
+            billingCycle: "monthly",
+            startDate: "2023-05-01",
+            cancellationDate: "2024-06-30",
+            cancellationReason: "Budget cuts",
+            status: "cancelled",
+            autoRenew: false,
+          },
+        ],
       },
-    ])
+    ]
+    setClientSubscriptions(fetchedData)
   }, [])
 
-  const generateInvoice = (clientSubscription: ClientSubscription) => {
-    const client = clients.find((c) => c.id === clientSubscription.clientId)
+  const filteredClientSubscriptions = clientSubscriptions.filter(
+    (cs) =>
+      cs.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      cs.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      cs.subscriptions.some((sub) => sub.planName.toLowerCase().includes(searchTerm.toLowerCase())),
+  )
+
+  const handleAddOrEditSubscription = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    const formData = new FormData(event.currentTarget)
+
+    const newOrUpdatedSubscription: Subscription = {
+      id: isEditing && currentClientSubscription ? (formData.get("subscriptionId") as string) : String(Date.now()), // Simple ID generation
+      clientId: currentClientSubscription?.id || (formData.get("clientId") as string),
+      planName: formData.get("planName") as string,
+      amount: Number.parseFloat(formData.get("amount") as string),
+      currency: formData.get("currency") as string,
+      billingCycle: formData.get("billingCycle") as Subscription["billingCycle"],
+      startDate: startDate ? format(startDate, "yyyy-MM-dd") : "",
+      endDate: endDate ? format(endDate, "yyyy-MM-dd") : undefined,
+      nextBillingDate: nextBillingDate ? format(nextBillingDate, "yyyy-MM-dd") : undefined,
+      status: formData.get("status") as Subscription["status"],
+      autoRenew: formData.get("autoRenew") === "on",
+      cancellationDate: cancellationDate ? format(cancellationDate, "yyyy-MM-dd") : undefined,
+      cancellationReason: formData.get("cancellationReason") as string,
+      paymentMethodDetails: formData.get("paymentMethodDetails") as string,
+    }
+
+    setClientSubscriptions((prev) =>
+      prev.map((client) => {
+        if (client.id === newOrUpdatedSubscription.clientId) {
+          const existingSubIndex = client.subscriptions.findIndex((sub) => sub.id === newOrUpdatedSubscription.id)
+          if (existingSubIndex !== -1) {
+            // Edit existing subscription
+            client.subscriptions[existingSubIndex] = newOrUpdatedSubscription
+          } else {
+            // Add new subscription to this client
+            client.subscriptions.push(newOrUpdatedSubscription)
+          }
+        }
+        return client
+      }),
+    )
+
+    setIsModalOpen(false)
+    resetFormState()
+  }
+
+  const handleDeleteSubscription = (clientId: string, subscriptionId: string) => {
+    setClientSubscriptions((prev) =>
+      prev.map((client) => {
+        if (client.id === clientId) {
+          client.subscriptions = client.subscriptions.filter((sub) => sub.id !== subscriptionId)
+        }
+        return client
+      }),
+    )
+  }
+
+  const openAddSubscriptionModal = (client: ClientSubscription) => {
+    setCurrentClientSubscription(client)
+    setIsEditing(false)
+    resetFormState()
+    setIsModalOpen(true)
+  }
+
+  const openEditSubscriptionModal = (client: ClientSubscription, sub: Subscription) => {
+    setCurrentClientSubscription({ ...client, subscriptions: [sub] }) // Temporarily store the specific sub for editing
+    setIsEditing(true)
+    setStartDate(sub.startDate ? new Date(sub.startDate) : undefined)
+    setEndDate(sub.endDate ? new Date(sub.endDate) : undefined)
+    setNextBillingDate(sub.nextBillingDate ? new Date(sub.nextBillingDate) : undefined)
+    setCancellationDate(sub.cancellationDate ? new Date(sub.cancellationDate) : undefined)
+    setIsModalOpen(true)
+  }
+
+  const openViewClientSubscriptionsModal = (client: ClientSubscription) => {
+    setCurrentClientSubscription(client)
+    setIsViewModalOpen(true)
+  }
+
+  const resetFormState = () => {
+    setStartDate(undefined)
+    setEndDate(undefined)
+    setNextBillingDate(undefined)
+    setCancellationDate(undefined)
+  }
+
+  const getStatusBadgeColor = (status: Subscription["status"]) => {
+    switch (status) {
+      case "active":
+        return "bg-green-100 text-green-800"
+      case "cancelled":
+        return "bg-red-100 text-red-800"
+      case "paused":
+        return "bg-yellow-100 text-yellow-800"
+      case "trialing":
+        return "bg-blue-100 text-blue-800"
+      case "expired":
+        return "bg-gray-100 text-gray-800"
+      default:
+        return "bg-gray-100 text-gray-800"
+    }
+  }
+
+  const generateInvoice = (clientSubscription: Subscription) => {
+    const client = clientSubscriptions.find((c) => c.id === clientSubscription.clientId)
     if (!client) return
 
     const doc = new jsPDF()
-    const invoiceNumber =
-      clientSubscription.invoiceNumber || `INV-${new Date().getFullYear()}-${String(Date.now()).slice(-6)}`
+    const invoiceNumber = `INV-${new Date().getFullYear()}-${String(Date.now()).slice(-6)}`
 
     // Company header
     doc.setFontSize(20)
@@ -157,10 +274,6 @@ export default function ClientSubscriptionsPage() {
     doc.setFont("helvetica", "normal")
     doc.text(client.name, 20, 90)
     doc.text(client.email, 20, 95)
-    const clientAddressLines = client.address.split("\n")
-    clientAddressLines.forEach((line, index) => {
-      doc.text(line, 20, 100 + index * 5)
-    })
 
     // Invoice details
     doc.setFont("helvetica", "bold")
@@ -180,20 +293,19 @@ export default function ClientSubscriptionsPage() {
 
     // Table content
     doc.setFont("helvetica", "normal")
-    doc.text(`${clientSubscription.subscriptionName} - Subscription Setup`, 20, 145)
-    doc.text(`$${clientSubscription.price.toFixed(2)}`, 150, 145)
+    doc.text(`${clientSubscription.planName} - Subscription Setup`, 20, 145)
+    doc.text(`$${clientSubscription.amount.toFixed(2)}`, 150, 145)
 
     // Total
     doc.line(20, 155, 190, 155)
     doc.setFont("helvetica", "bold")
     doc.text("Total:", 130, 165)
-    doc.text(`$${clientSubscription.price.toFixed(2)}`, 150, 165)
+    doc.text(`$${clientSubscription.amount.toFixed(2)}`, 150, 165)
 
     // Payment instructions
     doc.setFont("helvetica", "bold")
     doc.text("Payment Instructions:", 20, 190)
 
-    doc.setFont("helvetica", "normal")
     const paymentText =
       "Thank you for subscribing! This invoice covers your subscription setup. Future payments will be processed according to your billing cycle."
     const splitText = doc.splitTextToSize(paymentText, 170)
@@ -207,306 +319,355 @@ export default function ClientSubscriptionsPage() {
     doc.save(`${invoiceNumber}.pdf`)
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-
-    const selectedClient = clients.find((c) => c.id === Number.parseInt(formData.clientId))
-    const selectedSubscription = subscriptions.find((s) => s.id === Number.parseInt(formData.subscriptionId))
-
-    if (!selectedClient || !selectedSubscription) return
-
-    // Generate invoice number
-    const invoiceNumber = `INV-${new Date().getFullYear()}-${String(Date.now()).slice(-6)}`
-
-    const newClientSubscription: ClientSubscription = {
-      id: Date.now(),
-      clientId: selectedClient.id,
-      subscriptionId: selectedSubscription.id,
-      clientName: selectedClient.name,
-      subscriptionName: selectedSubscription.name,
-      price: selectedSubscription.price,
-      startDate: formData.startDate,
-      status: "active",
-      invoiceNumber,
-    }
-
-    setClientSubscriptions([...clientSubscriptions, newClientSubscription])
-
-    // Add invoice to the invoice list (simulate adding to database)
-    const newInvoice = {
-      id: Date.now(),
-      invoiceNumber,
-      clientName: selectedClient.name,
-      subscriptionName: selectedSubscription.name,
-      amount: selectedSubscription.price,
-      issueDate: new Date().toISOString().split("T")[0],
-      dueDate: "", // No due date for setup invoices
-      status: "pending" as const,
-      isSetupInvoice: true,
-    }
-
-    // Store in localStorage to simulate database
-    const existingInvoices = JSON.parse(localStorage.getItem("invoices") || "[]")
-    localStorage.setItem("invoices", JSON.stringify([...existingInvoices, newInvoice]))
-
-    setFormData({
-      clientId: "",
-      subscriptionId: "",
-      startDate: new Date().toISOString().split("T")[0],
-    })
-    setIsDialogOpen(false)
-
-    // Show success message
-    alert(`Client subscription created! Invoice ${invoiceNumber} has been added to your invoice list.`)
-  }
-
-  const handleStatusUpdate = (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!editingSubscription) return
-
-    const updatedSubscription = {
-      ...editingSubscription,
-      status: statusForm.status,
-      endDate: statusForm.endDate || undefined,
-    }
-
-    setClientSubscriptions(
-      clientSubscriptions.map((cs) => (cs.id === editingSubscription.id ? updatedSubscription : cs)),
-    )
-
-    setIsStatusDialogOpen(false)
-    setEditingSubscription(null)
-    setStatusForm({ status: "active", endDate: "" })
-  }
-
-  const handleUnlink = (id: number) => {
-    setClientSubscriptions(clientSubscriptions.filter((cs) => cs.id !== id))
-  }
-
-  const handleAddNew = () => {
-    setFormData({
-      clientId: "",
-      subscriptionId: "",
-      startDate: new Date().toISOString().split("T")[0],
-    })
-    setIsDialogOpen(true)
-  }
-
-  const handleEditStatus = (subscription: ClientSubscription) => {
-    setEditingSubscription(subscription)
-    setStatusForm({
-      status: subscription.status,
-      endDate: subscription.endDate || "",
-    })
-    setIsStatusDialogOpen(true)
-  }
-
-  const getStatusBadge = (status: ClientSubscription["status"]) => {
-    switch (status) {
-      case "active":
-        return <Badge className="bg-green-500 text-green-100 hover:bg-green-600">Active</Badge>
-      case "paused":
-        return <Badge variant="secondary">Paused</Badge>
-      case "cancelled":
-        return <Badge variant="destructive">Cancelled</Badge>
-      case "expired":
-        return <Badge variant="outline">Expired</Badge>
-      default:
-        return <Badge variant="outline">{status}</Badge>
-    }
-  }
-
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Client Subscriptions</h1>
-          <p className="text-gray-600">Link clients to subscriptions and manage their plans</p>
-        </div>
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-          <DialogTrigger asChild>
-            <Button onClick={handleAddNew}>
-              <Plus className="h-4 w-4 mr-2" />
-              Link Client to Subscription
-            </Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Link Client to Subscription</DialogTitle>
-              <DialogDescription>
-                Connect a client to a subscription plan. An invoice will be created and added to your invoice list.
-              </DialogDescription>
-            </DialogHeader>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="client">Select Client</Label>
-                <Select
-                  value={formData.clientId}
-                  onValueChange={(value) => setFormData({ ...formData, clientId: value })}
-                  required
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Choose a client" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {clients.map((client) => (
-                      <SelectItem key={client.id} value={client.id.toString()}>
-                        {client.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="subscription">Select Subscription</Label>
-                <Select
-                  value={formData.subscriptionId}
-                  onValueChange={(value) => setFormData({ ...formData, subscriptionId: value })}
-                  required
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Choose a subscription" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {subscriptions.map((subscription) => (
-                      <SelectItem key={subscription.id} value={subscription.id.toString()}>
-                        {subscription.name} - ${subscription.price.toFixed(2)}/{subscription.billingCycle}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="startDate">Start Date</Label>
-                <Input
-                  id="startDate"
-                  type="date"
-                  value={formData.startDate}
-                  onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
-                  required
-                />
-              </div>
-
-              <Button type="submit" className="w-full">
-                Link & Create Invoice
-              </Button>
-            </form>
-          </DialogContent>
-        </Dialog>
+    <div className="container mx-auto py-8">
+      <div className="flex justify-between items-center mb-6">
+        <h1 className="text-3xl font-bold text-gray-900">Client Subscriptions</h1>
+        {/* Add Client button if needed, or focus on adding subscriptions to existing clients */}
       </div>
 
-      {/* Status Update Dialog */}
-      <Dialog open={isStatusDialogOpen} onOpenChange={setIsStatusDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Update Subscription Status</DialogTitle>
-            <DialogDescription>
-              Change the status of {editingSubscription?.clientName}'s {editingSubscription?.subscriptionName}
-            </DialogDescription>
-          </DialogHeader>
-          <form onSubmit={handleStatusUpdate} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="status">Status</Label>
-              <Select
-                value={statusForm.status}
-                onValueChange={(value) =>
-                  setStatusForm({ ...statusForm, status: value as ClientSubscription["status"] })
-                }
-                required
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="active">Active</SelectItem>
-                  <SelectItem value="paused">Paused</SelectItem>
-                  <SelectItem value="cancelled">Cancelled</SelectItem>
-                  <SelectItem value="expired">Expired</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+      <div className="relative mb-6">
+        <Eye className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500" />
+        <Input
+          placeholder="Search clients or plans..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className="pl-9 pr-4 py-2 border rounded-md w-full"
+        />
+      </div>
 
-            {(statusForm.status === "cancelled" || statusForm.status === "expired") && (
-              <div className="space-y-2">
-                <Label htmlFor="endDate">End Date</Label>
-                <Input
-                  id="endDate"
-                  type="date"
-                  value={statusForm.endDate}
-                  onChange={(e) => setStatusForm({ ...statusForm, endDate: e.target.value })}
-                  required
-                />
-              </div>
+      <div className="rounded-md border overflow-hidden">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Client Name</TableHead>
+              <TableHead>Email</TableHead>
+              <TableHead className="text-right">Total Subscriptions</TableHead>
+              <TableHead className="text-right">Actions</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {filteredClientSubscriptions.map((client) => (
+              <TableRow key={client.id}>
+                <TableCell className="font-medium">{client.name}</TableCell>
+                <TableCell>{client.email}</TableCell>
+                <TableCell className="text-right">{client.subscriptions.length}</TableCell>
+                <TableCell className="text-right">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => openViewClientSubscriptionsModal(client)}
+                    className="mr-1"
+                  >
+                    <Eye className="h-4 w-4" />
+                    <span className="sr-only">View Subscriptions</span>
+                  </Button>
+                  <Button variant="ghost" size="sm" onClick={() => openAddSubscriptionModal(client)}>
+                    <Plus className="h-4 w-4" />
+                    <span className="sr-only">Add Subscription</span>
+                  </Button>
+                </TableCell>
+              </TableRow>
+            ))}
+            {filteredClientSubscriptions.length === 0 && (
+              <TableRow>
+                <TableCell colSpan={4} className="text-center py-4">
+                  No clients with subscriptions found.
+                </TableCell>
+              </TableRow>
             )}
+          </TableBody>
+        </Table>
+      </div>
 
-            <Button type="submit" className="w-full">
-              Update Status
-            </Button>
+      {/* Add/Edit Subscription Modal */}
+      <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
+        <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>
+              {isEditing ? "Edit Subscription" : `Add New Subscription for ${currentClientSubscription?.name}`}
+            </DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleAddOrEditSubscription} className="grid gap-4 py-4">
+            {isEditing && currentClientSubscription?.subscriptions[0]?.id && (
+              <input type="hidden" name="subscriptionId" value={currentClientSubscription.subscriptions[0].id} />
+            )}
+            <input type="hidden" name="clientId" value={currentClientSubscription?.id} />
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="planName" className="text-right">
+                Plan Name
+              </Label>
+              <Input
+                id="planName"
+                name="planName"
+                defaultValue={currentClientSubscription?.subscriptions[0]?.planName || ""}
+                className="col-span-3"
+                required
+              />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="amount" className="text-right">
+                Amount
+              </Label>
+              <Input
+                id="amount"
+                name="amount"
+                type="number"
+                step="0.01"
+                defaultValue={currentClientSubscription?.subscriptions[0]?.amount || ""}
+                className="col-span-3"
+                required
+              />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="currency" className="text-right">
+                Currency
+              </Label>
+              <Input
+                id="currency"
+                name="currency"
+                defaultValue={currentClientSubscription?.subscriptions[0]?.currency || "USD"}
+                className="col-span-3"
+                required
+              />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="billingCycle" className="text-right">
+                Billing Cycle
+              </Label>
+              <select
+                id="billingCycle"
+                name="billingCycle"
+                defaultValue={currentClientSubscription?.subscriptions[0]?.billingCycle || "monthly"}
+                className="col-span-3 flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <option value="monthly">Monthly</option>
+                <option value="annually">Annually</option>
+                <option value="quarterly">Quarterly</option>
+              </select>
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="startDate" className="text-right">
+                Start Date
+              </Label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant={"outline"}
+                    className={cn(
+                      "col-span-3 justify-start text-left font-normal",
+                      !startDate && "text-muted-foreground",
+                    )}
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {startDate ? format(startDate, "PPP") : <span>Pick a date</span>}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar mode="single" selected={startDate} onSelect={setStartDate} initialFocus />
+                </PopoverContent>
+              </Popover>
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="endDate" className="text-right">
+                End Date
+              </Label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant={"outline"}
+                    className={cn(
+                      "col-span-3 justify-start text-left font-normal",
+                      !endDate && "text-muted-foreground",
+                    )}
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {endDate ? format(endDate, "PPP") : <span>Pick a date</span>}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar mode="single" selected={endDate} onSelect={setEndDate} initialFocus />
+                </PopoverContent>
+              </Popover>
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="nextBillingDate" className="text-right">
+                Next Billing Date
+              </Label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant={"outline"}
+                    className={cn(
+                      "col-span-3 justify-start text-left font-normal",
+                      !nextBillingDate && "text-muted-foreground",
+                    )}
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {nextBillingDate ? format(nextBillingDate, "PPP") : <span>Pick a date</span>}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar mode="single" selected={nextBillingDate} onSelect={setNextBillingDate} initialFocus />
+                </PopoverContent>
+              </Popover>
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="status" className="text-right">
+                Status
+              </Label>
+              <select
+                id="status"
+                name="status"
+                defaultValue={currentClientSubscription?.subscriptions[0]?.status || "active"}
+                className="col-span-3 flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <option value="active">Active</option>
+                <option value="cancelled">Cancelled</option>
+                <option value="paused">Paused</option>
+                <option value="trialing">Trialing</option>
+                <option value="expired">Expired</option>
+              </select>
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="autoRenew" className="text-right">
+                Auto Renew
+              </Label>
+              <input
+                id="autoRenew"
+                name="autoRenew"
+                type="checkbox"
+                defaultChecked={currentClientSubscription?.subscriptions[0]?.autoRenew || true}
+                className="col-span-3 h-4 w-4"
+              />
+            </div>
+            {(currentClientSubscription?.subscriptions[0]?.status === "cancelled" ||
+              currentClientSubscription?.subscriptions[0]?.status === "expired") && (
+              <>
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="cancellationDate" className="text-right">
+                    Cancellation Date
+                  </Label>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant={"outline"}
+                        className={cn(
+                          "col-span-3 justify-start text-left font-normal",
+                          !cancellationDate && "text-muted-foreground",
+                        )}
+                      >
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {cancellationDate ? format(cancellationDate, "PPP") : <span>Pick a date</span>}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <Calendar mode="single" selected={cancellationDate} onSelect={setCancellationDate} initialFocus />
+                    </PopoverContent>
+                  </Popover>
+                </div>
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="cancellationReason" className="text-right">
+                    Cancellation Reason
+                  </Label>
+                  <Input
+                    id="cancellationReason"
+                    name="cancellationReason"
+                    defaultValue={currentClientSubscription?.subscriptions[0]?.cancellationReason || ""}
+                    className="col-span-3"
+                  />
+                </div>
+              </>
+            )}
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="paymentMethodDetails" className="text-right">
+                Payment Method Details
+              </Label>
+              <Input
+                id="paymentMethodDetails"
+                name="paymentMethodDetails"
+                defaultValue={currentClientSubscription?.subscriptions[0]?.paymentMethodDetails || ""}
+                className="col-span-3"
+              />
+            </div>
+            <DialogFooter>
+              <Button type="submit">{isEditing ? "Save Changes" : "Add Subscription"}</Button>
+            </DialogFooter>
           </form>
         </DialogContent>
       </Dialog>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Client Subscriptions</CardTitle>
-          <CardDescription>Manage client subscription relationships and their status</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Client</TableHead>
-                <TableHead>Subscription</TableHead>
-                <TableHead>Price</TableHead>
-                <TableHead>Start Date</TableHead>
-                <TableHead>End Date</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Invoice</TableHead>
-                <TableHead>Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {clientSubscriptions.map((cs) => (
-                <TableRow key={cs.id}>
-                  <TableCell className="font-medium">{cs.clientName}</TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-2">
-                      <span>{cs.subscriptionName}</span>
-                      <Badge variant="outline" className="text-xs">
-                        ${cs.price.toFixed(2)}
-                      </Badge>
-                    </div>
-                  </TableCell>
-                  <TableCell>${cs.price.toFixed(2)}</TableCell>
-                  <TableCell>{new Date(cs.startDate).toLocaleDateString()}</TableCell>
-                  <TableCell>{cs.endDate ? new Date(cs.endDate).toLocaleDateString() : "-"}</TableCell>
-                  <TableCell>{getStatusBadge(cs.status)}</TableCell>
-                  <TableCell>
-                    {cs.invoiceNumber && (
-                      <Button variant="ghost" size="sm" onClick={() => generateInvoice(cs)}>
-                        <FileText className="h-4 w-4 mr-2" />
-                        {cs.invoiceNumber}
-                      </Button>
+      {/* View Client Subscriptions Modal */}
+      <Dialog open={isViewModalOpen} onOpenChange={setIsViewModalOpen}>
+        <DialogContent className="sm:max-w-[800px] max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Subscriptions for {currentClientSubscription?.name}</DialogTitle>
+          </DialogHeader>
+          {currentClientSubscription && (
+            <div className="py-4">
+              <div className="rounded-md border overflow-hidden">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Plan</TableHead>
+                      <TableHead>Amount</TableHead>
+                      <TableHead>Billing Cycle</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Next Billing</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {currentClientSubscription.subscriptions.length > 0 ? (
+                      currentClientSubscription.subscriptions.map((sub) => (
+                        <TableRow key={sub.id}>
+                          <TableCell className="font-medium">{sub.planName}</TableCell>
+                          <TableCell>
+                            {sub.currency} {sub.amount.toFixed(2)}
+                          </TableCell>
+                          <TableCell className="capitalize">{sub.billingCycle}</TableCell>
+                          <TableCell>
+                            <Badge className={getStatusBadgeColor(sub.status)}>{sub.status}</Badge>
+                          </TableCell>
+                          <TableCell>{sub.nextBillingDate || "N/A"}</TableCell>
+                          <TableCell className="text-right">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => openEditSubscriptionModal(currentClientSubscription, sub)}
+                              className="mr-1"
+                            >
+                              <Edit className="h-4 w-4" />
+                              <span className="sr-only">Edit</span>
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleDeleteSubscription(currentClientSubscription.id, sub.id)}
+                            >
+                              <Trash2 className="h-4 w-4 text-red-500" />
+                              <span className="sr-only">Delete</span>
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    ) : (
+                      <TableRow>
+                        <TableCell colSpan={6} className="text-center py-4">
+                          No subscriptions for this client.
+                        </TableCell>
+                      </TableRow>
                     )}
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex gap-1">
-                      <Button variant="ghost" size="sm" onClick={() => handleEditStatus(cs)}>
-                        <Edit className="h-4 w-4" />
-                      </Button>
-                      <Button variant="ghost" size="sm" onClick={() => handleUnlink(cs.id)}>
-                        <Unlink className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+                  </TableBody>
+                </Table>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button onClick={() => setIsViewModalOpen(false)}>Close</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

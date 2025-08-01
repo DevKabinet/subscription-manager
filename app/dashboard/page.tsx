@@ -59,7 +59,6 @@ export default function DashboardPage() {
   const [revenueData, setRevenueData] = useState<ChartData[]>([])
   const [paymentStatusData, setPaymentStatusData] = useState<PaymentStatusData[]>([])
   const [isExchangeRateModalOpen, setIsExchangeRateModalOpen] = useState(false)
-  const [isLoading, setIsLoading] = useState(false) // Declare isLoading variable
 
   const { rates, isLoading: isRatesLoading, fetchRates, getCurrencyFlag } = useExchangeRateStore()
 
@@ -117,7 +116,8 @@ export default function DashboardPage() {
   const maxRevenue = Math.max(...revenueData.map((d) => d.revenue))
   const maxClients = Math.max(...revenueData.map((d) => d.clients))
 
-  const displayRates = rates.filter((rate) => rate.target_currency !== "USD").slice(0, 3) // Show top 3 non-USD rates
+  // Defensive check to ensure rates is an array before filtering
+  const displayRates = Array.isArray(rates) ? rates.filter((rate) => rate.target_currency !== "USD").slice(0, 3) : []
 
   return (
     <div className="space-y-8">
@@ -369,8 +369,8 @@ export default function DashboardPage() {
             <DollarSign className="h-5 w-5 text-green-500" />
             Current Exchange Rates
           </CardTitle>
-          <Button onClick={() => setIsExchangeRateModalOpen(true)} disabled={isLoading} size="sm">
-            <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? "animate-spin" : ""}`} />
+          <Button onClick={() => setIsExchangeRateModalOpen(true)} disabled={isRatesLoading} size="sm">
+            <RefreshCw className={`mr-2 h-4 w-4 ${isRatesLoading ? "animate-spin" : ""}`} />
             View All
           </Button>
         </CardHeader>

@@ -1,3 +1,4 @@
+import { neon } from "@neondatabase/serverless"
 import { NextResponse } from "next/server"
 
 interface ExchangeRateResponse {
@@ -146,14 +147,13 @@ async function saveExchangeRatesToDB(rates: ExchangeRateResponse, updatedBy = "a
 }
 
 export async function GET() {
+  const sql = neon(process.env.DATABASE_URL!)
+
   try {
-    // Return current exchange rates from database (mock)
-    return NextResponse.json({
-      success: true,
-      data: mockExchangeRates,
-      history: mockExchangeRateHistory.slice(-10), // Last 10 history entries
-      last_updated: new Date().toISOString(),
-    })
+    const rates = await sql`SELECT * FROM exchange_rates ORDER BY target_currency ASC`
+    const history = await sql`SELECT * FROM exchange_rate_history ORDER BY created_at DESC LIMIT 50`
+
+    return NextResponse.json({ success: true, data: rates, history })
   } catch (error) {
     console.error("Error fetching exchange rates:", error)
     return NextResponse.json({ success: false, error: "Failed to fetch exchange rates" }, { status: 500 })
@@ -161,122 +161,29 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  const sql = neon(process.env.DATABASE_URL!)
+  const { base_currency, target_currency, rate, is_manual, updated_by } = await request.json()
+
+  if (!base_currency || !target_currency || rate === undefined) {
+    return NextResponse.json({ success: false, error: "Missing required fields" }, { status: 400 })
+  }
+
   try {
-    const body = await request.json()
-    const { action, currency, rate, updated_by = "system" } = body
-
-    if (action === "fetch_latest") {
-      // Fetch latest rates from API and save to database (respecting manual overrides)
-      const apiData = await fetchExchangeRatesFromAPI()
-
-      if (apiData) {
-        await saveExchangeRatesToDB(apiData, updated_by)
-        return NextResponse.json({
-          success: true,
-          message: "Exchange rates updated successfully (manual overrides preserved)",
-          data: mockExchangeRates,
-          history: mockExchangeRateHistory.slice(-5), // Last 5 history entries
-        })
-      } else {
-        return NextResponse.json(
-          {
-            success: false,
-            error: "Failed to fetch rates from external API",
-          },
-          { status: 500 },
-        )
-      }
-    }
-
-    if (action === "update_manual" && currency && rate) {
-      // Update specific currency rate manually
-      const existingRateIndex = mockExchangeRates.findIndex(
-        (r) => r.base_currency === "USD" && r.target_currency === currency,
-      )
-
-      if (existingRateIndex !== -1) {
-        const existingRate = mockExchangeRates[existingRateIndex]
-        const oldRate = existingRate.rate
-        const newRate = Number.parseFloat(rate)
-
-        // Add to history
-        mockExchangeRateHistory.push({
-          base_currency: "USD",
-          target_currency: currency,
-          old_rate: oldRate,
-          new_rate: newRate,
-          change_type: "manual_update",
-          updated_by: updated_by,
-          notes: `Manual update by ${updated_by}`,
-        })
-
-        // Update the rate with manual flags
-        mockExchangeRates[existingRateIndex] = {
-          ...existingRate,
-          rate: newRate,
-          last_updated: new Date().toISOString(),
-          is_manual: true,
-          manual_updated_at: new Date().toISOString(),
-          manual_updated_by: updated_by,
-        }
-
-        return NextResponse.json({
-          success: true,
-          message: `${currency} rate updated manually (will be protected from API updates for 24 hours)`,
-          data: mockExchangeRates,
-          history: mockExchangeRateHistory.slice(-5),
-        })
-      } else {
-        return NextResponse.json({ success: false, error: "Currency not found" }, { status: 404 })
-      }
-    }
-
-    if (action === "get_history") {
-      // Return exchange rate history
-      return NextResponse.json({
-        success: true,
-        history: mockExchangeRateHistory.slice(-20), // Last 20 history entries
-      })
-    }
-
-    if (action === "reset_manual" && currency) {
-      // Reset manual override for a currency (allow API updates again)
-      const existingRateIndex = mockExchangeRates.findIndex(
-        (r) => r.base_currency === "USD" && r.target_currency === currency,
-      )
-
-      if (existingRateIndex !== -1) {
-        mockExchangeRates[existingRateIndex] = {
-          ...mockExchangeRates[existingRateIndex],
-          is_manual: false,
-          manual_updated_at: undefined,
-          manual_updated_by: undefined,
-        }
-
-        // Add to history
-        mockExchangeRateHistory.push({
-          base_currency: "USD",
-          target_currency: currency,
-          old_rate: mockExchangeRates[existingRateIndex].rate,
-          new_rate: mockExchangeRates[existingRateIndex].rate,
-          change_type: "manual_reset",
-          updated_by: updated_by,
-          notes: `Manual override reset - rate will be updated by API on next sync`,
-        })
-
-        return NextResponse.json({
-          success: true,
-          message: `${currency} manual override reset - will be updated by API on next sync`,
-          data: mockExchangeRates,
-        })
-      } else {
-        return NextResponse.json({ success: false, error: "Currency not found" }, { status: 404 })
-      }
-    }
-
-    return NextResponse.json({ success: false, error: "Invalid action" }, { status: 400 })
+    const now = new Date().toISOString()
+    const result = await sql`
+      INSERT INTO exchange_rates (base_currency, target_currency, rate, is_manual, manual_updated_at, manual_updated_by)
+      VALUES (${base_currency}, ${target_currency}, ${rate}, ${is_manual}, ${is_manual ? now : null}, ${is_manual ? updated_by : null})
+      ON CONFLICT (base_currency, target_currency) DO UPDATE SET
+        rate = EXCLUDED.rate,
+        last_updated = ${now},
+        is_manual = EXCLUDED.is_manual,
+        manual_updated_at = EXCLUDED.manual_updated_at,
+        manual_updated_by = EXCLUDED.manual_updated_by
+      RETURNING *;
+    `
+    return NextResponse.json({ success: true, data: result[0] })
   } catch (error) {
-    console.error("Error processing exchange rate request:", error)
-    return NextResponse.json({ success: false, error: "Internal server error" }, { status: 500 })
+    console.error("Error updating exchange rate:", error)
+    return NextResponse.json({ success: false, error: "Failed to update exchange rate" }, { status: 500 })
   }
 }

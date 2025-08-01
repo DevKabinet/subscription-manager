@@ -1,21 +1,40 @@
--- Add client_subscriptions table for linking clients to subscriptions
-CREATE TABLE IF NOT EXISTS client_subscriptions (
-  id SERIAL PRIMARY KEY,
-  client_id INTEGER REFERENCES clients(id) ON DELETE CASCADE,
-  subscription_id INTEGER REFERENCES subscriptions(id) ON DELETE CASCADE,
-  start_date DATE NOT NULL,
-  end_date DATE,
-  is_active BOOLEAN DEFAULT TRUE,
-  invoice_number VARCHAR(100),
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  UNIQUE(client_id, subscription_id)
+-- Add new columns to the clients table
+ALTER TABLE clients
+ADD COLUMN company_name VARCHAR(255),
+ADD COLUMN contact_person VARCHAR(255),
+ADD COLUMN industry VARCHAR(255),
+ADD COLUMN website VARCHAR(255),
+ADD COLUMN notes TEXT;
+
+-- Add new columns to the subscriptions table
+ALTER TABLE subscriptions
+ADD COLUMN next_billing_date DATE,
+ADD COLUMN trial_end_date DATE,
+ADD COLUMN auto_renew BOOLEAN DEFAULT TRUE,
+ADD COLUMN cancellation_date DATE,
+ADD COLUMN cancellation_reason TEXT,
+ADD COLUMN payment_method_details TEXT;
+
+-- Add new columns to the invoices table
+ALTER TABLE invoices
+ADD COLUMN tax_rate DECIMAL(5, 4) DEFAULT 0.00,
+ADD COLUMN discount_amount DECIMAL(10, 2) DEFAULT 0.00,
+ADD COLUMN subtotal DECIMAL(10, 2) NOT NULL DEFAULT 0.00;
+
+-- Add new columns to the payments table
+ALTER TABLE payments
+ADD COLUMN reference_number VARCHAR(255),
+ADD COLUMN fees DECIMAL(10, 2) DEFAULT 0.00,
+ADD COLUMN notes TEXT;
+
+-- Create a table for audit logs (optional but good for tracking changes)
+CREATE TABLE IF NOT EXISTS audit_logs (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    table_name VARCHAR(255) NOT NULL,
+    record_id UUID NOT NULL,
+    action_type VARCHAR(50) NOT NULL, -- e.g., 'INSERT', 'UPDATE', 'DELETE'
+    old_data JSONB,
+    new_data JSONB,
+    changed_by VARCHAR(255), -- User who made the change
+    changed_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
-
--- Insert sample client subscriptions
-INSERT INTO client_subscriptions (client_id, subscription_id, start_date, invoice_number)
-SELECT 1, 1, '2024-01-01', 'INV-2024-001'
-WHERE NOT EXISTS (SELECT 1 FROM client_subscriptions WHERE client_id = 1 AND subscription_id = 1);
-
-INSERT INTO client_subscriptions (client_id, subscription_id, start_date, invoice_number)
-SELECT 2, 2, '2024-01-05', 'INV-2024-002'
-WHERE NOT EXISTS (SELECT 1 FROM client_subscriptions WHERE client_id = 2 AND subscription_id = 2);
