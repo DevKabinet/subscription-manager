@@ -2,7 +2,20 @@
 
 import { useEffect, useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Users, FileText, TrendingUp, DollarSign, Calendar, LinkIcon, ArrowUpRight, ArrowDownRight } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import {
+  Users,
+  FileText,
+  TrendingUp,
+  DollarSign,
+  Calendar,
+  LinkIcon,
+  ArrowUpRight,
+  ArrowDownRight,
+  RefreshCw,
+} from "lucide-react"
+import { useExchangeRateStore } from "@/lib/exchange-rates"
+import { ExchangeRateModal } from "@/components/exchange-rate-modal"
 
 interface DashboardStats {
   totalClients: number
@@ -45,10 +58,14 @@ export default function DashboardPage() {
 
   const [revenueData, setRevenueData] = useState<ChartData[]>([])
   const [paymentStatusData, setPaymentStatusData] = useState<PaymentStatusData[]>([])
+  const [isExchangeRateModalOpen, setIsExchangeRateModalOpen] = useState(false)
+
+  const { rates, isLoading: isRatesLoading, fetchRates, getCurrencyFlag } = useExchangeRateStore()
 
   useEffect(() => {
     calculateStats()
     loadChartData()
+    fetchRates() // Fetch rates when dashboard loads
   }, [])
 
   const calculateStats = () => {
@@ -99,11 +116,13 @@ export default function DashboardPage() {
   const maxRevenue = Math.max(...revenueData.map((d) => d.revenue))
   const maxClients = Math.max(...revenueData.map((d) => d.clients))
 
+  const displayRates = rates.filter((rate) => rate.target_currency !== "USD").slice(0, 3) // Show top 3 non-USD rates
+
   return (
     <div className="space-y-8">
       {/* Welcome Section */}
       <div className="text-center py-6">
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">Business Dashboard</h1>
+        <h1 className="text-3xl font-bold text-gray-900">Business Dashboard</h1>
         <p className="text-lg text-gray-600">Track your subscription business performance</p>
       </div>
 
@@ -342,6 +361,47 @@ export default function DashboardPage() {
         </Card>
       </div>
 
+      {/* Exchange Rates Card */}
+      <Card className="hover-lift">
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+          <CardTitle className="text-lg font-semibold flex items-center gap-2">
+            <DollarSign className="h-5 w-5 text-green-500" />
+            Current Exchange Rates
+          </CardTitle>
+          <Button variant="outline" size="sm" onClick={() => setIsExchangeRateModalOpen(true)}>
+            <RefreshCw className={`h-4 w-4 mr-2 ${isRatesLoading ? "animate-spin" : ""}`} />
+            View All
+          </Button>
+        </CardHeader>
+        <CardContent>
+          {isRatesLoading ? (
+            <div className="text-center text-gray-500 py-4">Loading rates...</div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {displayRates.map((rate) => (
+                <div key={rate.target_currency} className="p-3 border rounded-md bg-gray-50">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="font-medium text-gray-800">
+                      {getCurrencyFlag(rate.target_currency)} {rate.target_currency}
+                    </span>
+                    {rate.is_manual && <span className="text-xs text-blue-600">Manual</span>}
+                  </div>
+                  <div className="text-xl font-bold text-green-700">
+                    1 USD = {rate.rate.toFixed(4)} {rate.target_currency}
+                  </div>
+                  <div className="text-xs text-gray-500 mt-1">
+                    Last updated: {new Date(rate.last_updated).toLocaleDateString()}
+                  </div>
+                </div>
+              ))}
+              {displayRates.length === 0 && (
+                <div className="col-span-full text-center text-gray-500 py-4">No exchange rates available.</div>
+              )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
       {/* Quick Insights */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <Card className="hover-lift">
@@ -383,6 +443,9 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Exchange Rate Modal */}
+      <ExchangeRateModal isOpen={isExchangeRateModalOpen} onClose={() => setIsExchangeRateModalOpen(false)} />
     </div>
   )
 }
