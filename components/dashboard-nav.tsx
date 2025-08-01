@@ -8,8 +8,8 @@ import { Users, CreditCard, FileText, BarChart3, Receipt, LinkIcon } from "lucid
 const navigation = [
   { name: "Overview", href: "/dashboard", icon: BarChart3 },
   { name: "Clients", href: "/dashboard/clients", icon: Users },
-  { name: "Subscriptions", href: "/dashboard/subscriptions", icon: CreditCard },
-  { name: "Client Subscriptions", href: "/dashboard/client-subscriptions", icon: LinkIcon },
+  { name: "Plans", href: "/dashboard/subscriptions", icon: CreditCard },
+  { name: "Subscriptions", href: "/dashboard/client-subscriptions", icon: LinkIcon },
   { name: "Payments", href: "/dashboard/payments", icon: FileText },
   { name: "Invoices", href: "/dashboard/invoices", icon: Receipt },
 ]
