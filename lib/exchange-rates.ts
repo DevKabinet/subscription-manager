@@ -63,46 +63,63 @@ const currencyFlags: { [key: string]: string } = {
   INR: "🇮🇳",
 }
 
+// Mock exchange rates - in production, this would come from an API
+const mockRates: ExchangeRate[] = [
+  {
+    base_currency: "USD",
+    target_currency: "USD",
+    rate: 1.0,
+    last_updated: "2024-01-15T10:00:00Z",
+    is_manual: false,
+  },
+  {
+    base_currency: "USD",
+    target_currency: "EUR",
+    rate: 0.85,
+    last_updated: "2024-01-15T10:00:00Z",
+    is_manual: false,
+  },
+  {
+    base_currency: "USD",
+    target_currency: "SRD",
+    rate: 17.74,
+    last_updated: "2024-01-15T10:00:00Z",
+    is_manual: false,
+  },
+  {
+    base_currency: "USD",
+    target_currency: "GBP",
+    rate: 0.79,
+    last_updated: "2024-01-15T10:00:00Z",
+    is_manual: false,
+  },
+  {
+    base_currency: "USD",
+    target_currency: "CAD",
+    rate: 1.35,
+    last_updated: "2024-01-15T10:00:00Z",
+    is_manual: false,
+  },
+  {
+    base_currency: "USD",
+    target_currency: "JPY",
+    rate: 110.25,
+    last_updated: "2024-01-15T10:00:00Z",
+    is_manual: false,
+  },
+  {
+    base_currency: "USD",
+    target_currency: "AUD",
+    rate: 1.35,
+    last_updated: "2024-01-15T10:00:00Z",
+    is_manual: false,
+  },
+]
+
 export const useExchangeRateStore = create<ExchangeRateStore>()(
   persist(
     (set, get) => ({
-      rates: [
-        {
-          base_currency: "USD",
-          target_currency: "USD",
-          rate: 1.0,
-          last_updated: new Date().toISOString(),
-          is_manual: false,
-        },
-        {
-          base_currency: "USD",
-          target_currency: "EUR",
-          rate: 0.85,
-          last_updated: new Date().toISOString(),
-          is_manual: false,
-        },
-        {
-          base_currency: "USD",
-          target_currency: "SRD",
-          rate: 17.74,
-          last_updated: new Date().toISOString(),
-          is_manual: false,
-        },
-        {
-          base_currency: "USD",
-          target_currency: "GBP",
-          rate: 0.79,
-          last_updated: new Date().toISOString(),
-          is_manual: false,
-        },
-        {
-          base_currency: "USD",
-          target_currency: "CAD",
-          rate: 1.35,
-          last_updated: new Date().toISOString(),
-          is_manual: false,
-        },
-      ],
+      rates: mockRates, // Initialize with the array
       history: [],
       lastFetched: null,
       isLoading: false,
@@ -111,35 +128,45 @@ export const useExchangeRateStore = create<ExchangeRateStore>()(
       setRates: (rates) => set({ rates, lastFetched: new Date().toISOString(), error: null }),
 
       updateRate: (baseCurrency, targetCurrency, rate, isManual = true, updatedBy = "manual_user") => {
-        const { rates, history } = get()
         const now = new Date().toISOString()
-
-        const existingRateIndex = rates.findIndex(
-          (r) => r.base_currency === baseCurrency && r.target_currency === targetCurrency,
-        )
-
-        let oldRate: number | undefined
-        let updatedRates: ExchangeRate[]
-
-        if (existingRateIndex !== -1) {
-          const existingRate = rates[existingRateIndex]
-          oldRate = existingRate.rate
-          updatedRates = rates.map((r, index) =>
-            index === existingRateIndex
-              ? {
-                  ...r,
-                  rate,
-                  is_manual: isManual,
-                  last_updated: now,
-                  manual_updated_at: isManual ? now : undefined,
-                  manual_updated_by: isManual ? updatedBy : undefined,
-                }
-              : r,
+        set((state) => {
+          const existingRateIndex = state.rates.findIndex(
+            (r) => r.base_currency === baseCurrency && r.target_currency === targetCurrency,
           )
-        } else {
-          updatedRates = [
-            ...rates,
-            {
+
+          let oldRate: number | undefined
+          let updatedRates: ExchangeRate[]
+          let newHistoryEntry: ExchangeRateHistoryEntry
+
+          if (existingRateIndex !== -1) {
+            const existingRate = state.rates[existingRateIndex]
+            oldRate = existingRate.rate
+            updatedRates = state.rates.map((r, index) =>
+              index === existingRateIndex
+                ? {
+                    ...r,
+                    rate,
+                    is_manual: isManual,
+                    last_updated: now,
+                    manual_updated_at: isManual ? now : undefined,
+                    manual_updated_by: isManual ? updatedBy : undefined,
+                  }
+                : r,
+            )
+            newHistoryEntry = {
+              id: Date.now(),
+              base_currency: baseCurrency,
+              target_currency: targetCurrency,
+              old_rate: oldRate,
+              new_rate: rate,
+              change_type: isManual ? "manual_update" : "api_update",
+              updated_by: updatedBy,
+              notes: isManual ? `Manual update by ${updatedBy}` : "API update",
+              created_at: now,
+            }
+          } else {
+            // If rate doesn't exist, add it
+            const newRate: ExchangeRate = {
               base_currency: baseCurrency,
               target_currency: targetCurrency,
               rate,
@@ -147,49 +174,67 @@ export const useExchangeRateStore = create<ExchangeRateStore>()(
               last_updated: now,
               manual_updated_at: isManual ? now : undefined,
               manual_updated_by: isManual ? updatedBy : undefined,
-            },
-          ]
-        }
+            }
+            updatedRates = [...state.rates, newRate]
+            newHistoryEntry = {
+              id: Date.now(),
+              base_currency: baseCurrency,
+              target_currency: targetCurrency,
+              old_rate: 0, // Or some default for new entry
+              new_rate: rate,
+              change_type: "new_entry",
+              updated_by: updatedBy,
+              notes: `New rate added by ${updatedBy}`,
+              created_at: now,
+            }
+          }
 
-        // Add to history
-        const newHistoryEntry: ExchangeRateHistoryEntry = {
-          id: Date.now(),
-          base_currency: baseCurrency,
-          target_currency: targetCurrency,
-          old_rate: oldRate || rate, // If new rate, old rate is same as new for history purposes
-          new_rate: rate,
-          change_type: isManual ? "manual_update" : "api_update",
-          updated_by: updatedBy,
-          notes: isManual ? `Manual update by ${updatedBy}` : "API update",
-          created_at: now,
-        }
-
-        set({ rates: updatedRates, history: [newHistoryEntry, ...history].slice(0, 50) }) // Keep last 50 entries
+          return {
+            rates: updatedRates,
+            history: [newHistoryEntry, ...state.history].slice(0, 50), // Keep last 50 entries
+          }
+        })
       },
 
       fetchRates: async () => {
         set({ isLoading: true, error: null })
         try {
-          const response = await fetch("/api/exchange-rates")
-          const result = await response.json()
+          // Simulate API call
+          await new Promise((resolve) => setTimeout(resolve, 1000))
 
-          if (result.success) {
-            set({
-              rates: result.data,
-              history: result.history || [], // Ensure history is also updated
-              lastFetched: new Date().toISOString(),
-              isLoading: false,
-              error: null,
-            })
-          } else {
-            throw new Error(result.error || "Failed to fetch rates")
-          }
+          // In production, this would be an actual API call
+          // const response = await fetch('/api/exchange-rates')
+          // const data = await response.json()
+
+          const now = new Date().toISOString()
+          const currentRates = get().rates // Get current rates to preserve manual updates
+
+          // Simulate fetching updated rates, preserving manual updates if recent
+          const fetchedRates = mockRates.map((mockRate) => {
+            const existing = currentRates.find(
+              (r) => r.base_currency === mockRate.base_currency && r.target_currency === mockRate.target_currency,
+            )
+            if (
+              existing &&
+              existing.is_manual &&
+              existing.manual_updated_at &&
+              new Date().getTime() - new Date(existing.manual_updated_at).getTime() < 24 * 60 * 60 * 1000
+            ) {
+              // If manually updated recently, keep the manual rate
+              return existing
+            }
+            return { ...mockRate, last_updated: now, is_manual: false } // Otherwise, update from mock (simulated API)
+          })
+
+          set({
+            rates: fetchedRates,
+            lastFetched: now,
+            isLoading: false,
+            error: null,
+          })
         } catch (error) {
           console.error("Failed to fetch exchange rates:", error)
-          set({
-            isLoading: false,
-            error: error instanceof Error ? error.message : "Failed to fetch rates",
-          })
+          set({ isLoading: false, error: error instanceof Error ? error.message : "Failed to fetch rates" })
         }
       },
 

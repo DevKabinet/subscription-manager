@@ -59,6 +59,7 @@ export default function DashboardPage() {
   const [revenueData, setRevenueData] = useState<ChartData[]>([])
   const [paymentStatusData, setPaymentStatusData] = useState<PaymentStatusData[]>([])
   const [isExchangeRateModalOpen, setIsExchangeRateModalOpen] = useState(false)
+  const [isLoading, setIsLoading] = useState(false) // Declare isLoading variable
 
   const { rates, isLoading: isRatesLoading, fetchRates, getCurrencyFlag } = useExchangeRateStore()
 
@@ -368,8 +369,8 @@ export default function DashboardPage() {
             <DollarSign className="h-5 w-5 text-green-500" />
             Current Exchange Rates
           </CardTitle>
-          <Button variant="outline" size="sm" onClick={() => setIsExchangeRateModalOpen(true)}>
-            <RefreshCw className={`h-4 w-4 mr-2 ${isRatesLoading ? "animate-spin" : ""}`} />
+          <Button onClick={() => setIsExchangeRateModalOpen(true)} disabled={isLoading} size="sm">
+            <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? "animate-spin" : ""}`} />
             View All
           </Button>
         </CardHeader>
