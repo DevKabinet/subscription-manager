@@ -45,6 +45,7 @@ export default function DashboardLayout({
   }
 
   const userEmail = localStorage.getItem("userEmail") || "user@example.com"
+  const isTester = localStorage.getItem("isTester") === "true"
 
   const handleSettingsSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -69,7 +70,8 @@ export default function DashboardLayout({
           <div className="flex justify-between items-center py-4">
             <h1 className="text-2xl font-bold text-gray-900">Subscription Manager</h1>
             <div className="flex items-center gap-4">
-              <Badge variant="secondary">{localStorage.getItem("isTester") ? "Tester Mode" : "Live Mode"}</Badge>
+              {/* Only show badge for tester mode */}
+              {isTester && <Badge variant="secondary">Tester Mode</Badge>}
 
               {/* Exchange Rate Button */}
               <Button

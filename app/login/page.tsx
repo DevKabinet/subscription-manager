@@ -24,6 +24,14 @@ export default function LoginPage() {
     setTimeout(() => {
       localStorage.setItem("isAuthenticated", "true")
       localStorage.setItem("userEmail", email)
+
+      // Check if this is a tester account
+      if (email === "tester@example.com") {
+        localStorage.setItem("isTester", "true")
+      } else {
+        localStorage.removeItem("isTester") // Ensure it's not set for production users
+      }
+
       router.push("/dashboard")
     }, 1000)
   }
@@ -33,6 +41,14 @@ export default function LoginPage() {
     localStorage.setItem("isAuthenticated", "true")
     localStorage.setItem("userEmail", "tester@example.com")
     localStorage.setItem("isTester", "true")
+    router.push("/dashboard")
+  }
+
+  const handleProductionLogin = () => {
+    setIsLoading(true)
+    localStorage.setItem("isAuthenticated", "true")
+    localStorage.setItem("userEmail", "admin@company.com")
+    localStorage.removeItem("isTester") // Ensure tester flag is not set
     router.push("/dashboard")
   }
 
@@ -79,18 +95,38 @@ export default function LoginPage() {
               <Separator className="w-full" />
             </div>
             <div className="relative flex justify-center text-xs uppercase">
-              <span className="bg-white px-2 text-muted-foreground">Or</span>
+              <span className="bg-white px-2 text-muted-foreground">Quick Access</span>
             </div>
           </div>
 
-          <Button
-            variant="outline"
-            className="w-full hover-lift bg-transparent"
-            onClick={handleTesterLogin}
-            disabled={isLoading}
-          >
-            Continue as Tester
-          </Button>
+          <div className="space-y-2">
+            <Button
+              variant="outline"
+              className="w-full hover-lift bg-transparent"
+              onClick={handleTesterLogin}
+              disabled={isLoading}
+            >
+              Continue as Tester
+            </Button>
+
+            <Button
+              variant="outline"
+              className="w-full hover-lift bg-transparent"
+              onClick={handleProductionLogin}
+              disabled={isLoading}
+            >
+              Continue as Admin
+            </Button>
+          </div>
+
+          <div className="text-xs text-center text-gray-500 mt-4">
+            <p>
+              <strong>Tester:</strong> Shows "Tester Mode" badge with sample data
+            </p>
+            <p>
+              <strong>Admin:</strong> Production mode without badge
+            </p>
+          </div>
         </CardContent>
       </Card>
     </div>
