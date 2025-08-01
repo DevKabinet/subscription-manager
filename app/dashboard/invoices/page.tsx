@@ -13,7 +13,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Download, FileText, Plus, Calculator, DollarSign, Percent, Trash2 } from "lucide-react"
+import { Download, FileText, Plus, Calculator, DollarSign, Percent, Trash2, UserPlus } from "lucide-react"
 import jsPDF from "jspdf"
 import { useExchangeRateStore } from "@/lib/exchange-rates"
 import { useCompanySettingsStore } from "@/lib/company-settings"
@@ -33,7 +33,7 @@ interface Invoice {
   originalTotalAmount: number
   exchangeRate: number
   issueDate: string
-  dueDate: string
+  dueDate?: string
   status: "paid" | "pending" | "overdue"
   notes?: string
   isSetupInvoice?: boolean
@@ -80,7 +80,7 @@ interface InvoicePreview {
   originalTotalAmount: number
   exchangeRate: number
   issueDate: string
-  dueDate: string
+  dueDate?: string
   notes?: string
   isSetupInvoice?: boolean
 }
@@ -230,7 +230,6 @@ export default function InvoicesPage() {
         originalTotalAmount: 152.982,
         exchangeRate: 17.74,
         issueDate: "2024-01-05",
-        dueDate: "2024-01-20",
         status: "paid",
         isSetupInvoice: false,
       },
@@ -330,6 +329,22 @@ export default function InvoicesPage() {
     updateItemsForCurrency(currency)
   }
 
+  const handleClientChange = (clientId: string) => {
+    setFormData({ ...formData, clientId })
+
+    // Auto-add client subscriptions when client is selected
+    if (clientId) {
+      const clientSubs = clientSubscriptions[Number.parseInt(clientId)] || []
+      clientSubs.forEach((subId) => {
+        // Only add if not already in items
+        const exists = invoiceItems.some((item) => item.type === "subscription" && item.subscriptionId === subId)
+        if (!exists) {
+          addSubscriptionItem(subId)
+        }
+      })
+    }
+  }
+
   const getSubtotal = () => {
     return invoiceItems.reduce((sum, item) => sum + item.amount, 0)
   }
@@ -363,6 +378,13 @@ export default function InvoicesPage() {
     return subscriptions.filter((sub) => subscriptionIds.includes(sub.id))
   }
 
+  const getAvailableSubscriptions = () => {
+    // Return subscriptions not already in the invoice items
+    return subscriptions.filter(
+      (sub) => !invoiceItems.some((item) => item.type === "subscription" && item.subscriptionId === sub.id),
+    )
+  }
+
   const handleGenerateInvoice = () => {
     setFormData({
       clientId: "",
@@ -373,10 +395,6 @@ export default function InvoicesPage() {
       notes: "",
     })
     setInvoiceItems([])
-    // Set default due date (30 days from issue date)
-    const dueDate = new Date()
-    dueDate.setDate(dueDate.getDate() + 30)
-    setFormData((prev) => ({ ...prev, dueDate: dueDate.toISOString().split("T")[0] }))
     setIsGenerateModalOpen(true)
   }
 
@@ -415,7 +433,7 @@ export default function InvoicesPage() {
       originalTotalAmount: getOriginalTotalAmount(),
       exchangeRate: getCurrentExchangeRate(),
       issueDate: formData.issueDate,
-      dueDate: formData.dueDate,
+      dueDate: formData.dueDate || undefined,
       status: "pending",
       notes: formData.notes,
     }
@@ -489,10 +507,18 @@ export default function InvoicesPage() {
 
     doc.setFont("helvetica", "normal")
     doc.text(`Issue Date: ${new Date(invoice.issueDate).toLocaleDateString()}`, 120, 100)
-    doc.text(`Due Date: ${new Date(invoice.dueDate).toLocaleDateString()}`, 120, 105)
-    doc.text(`Currency: ${invoice.currency}`, 120, 110)
+
+    // Only add due date if it exists
+    let detailsYPos = 105
+    if (invoice.dueDate) {
+      doc.text(`Due Date: ${new Date(invoice.dueDate).toLocaleDateString()}`, 120, detailsYPos)
+      detailsYPos += 5
+    }
+
+    doc.text(`Currency: ${invoice.currency}`, 120, detailsYPos)
     if (invoice.currency !== "USD") {
-      doc.text(`Exchange Rate: 1 USD = ${invoice.exchangeRate.toFixed(6)} ${invoice.currency}`, 120, 115)
+      detailsYPos += 5
+      doc.text(`Exchange Rate: 1 USD = ${invoice.exchangeRate.toFixed(6)} ${invoice.currency}`, 120, detailsYPos)
     }
 
     // Table header
@@ -572,7 +598,7 @@ export default function InvoicesPage() {
     doc.setFont("helvetica", "normal")
     const paymentText =
       companySettings.paymentTerms ||
-      `Please make payment by the due date in ${invoice.currency}. Payment can be made via cash, check, or bank transfer.`
+      `Please make payment ${invoice.dueDate ? "by the due date" : "promptly"} in ${invoice.currency}. Payment can be made via cash, check, or bank transfer.`
     const splitText = doc.splitTextToSize(paymentText, 170)
     doc.text(splitText, 20, yPosition)
 
@@ -795,7 +821,13 @@ export default function InvoicesPage() {
                   </TableCell>
                   <TableCell>{new Date(invoice.issueDate).toLocaleDateString()}</TableCell>
                   <TableCell>
-                    {invoice.dueDate ? new Date(invoice.dueDate).toLocaleDateString() : "No due date"}
+                    {invoice.dueDate ? (
+                      new Date(invoice.dueDate).toLocaleDateString()
+                    ) : (
+                      <Badge variant="outline" className="text-xs">
+                        No due date
+                      </Badge>
+                    )}
                   </TableCell>
                   <TableCell>{getStatusBadge(invoice.status)}</TableCell>
                   <TableCell>
@@ -831,18 +863,23 @@ export default function InvoicesPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="client">Select Client</Label>
-                <Select
-                  value={formData.clientId}
-                  onValueChange={(value) => setFormData({ ...formData, clientId: value })}
-                  required
-                >
+                <Select value={formData.clientId} onValueChange={handleClientChange} required>
                   <SelectTrigger>
                     <SelectValue placeholder="Choose a client" />
                   </SelectTrigger>
                   <SelectContent>
                     {clients.map((client) => (
                       <SelectItem key={client.id} value={client.id.toString()}>
-                        {client.name}
+                        <div className="flex items-center gap-2">
+                          <UserPlus className="h-4 w-4" />
+                          {client.name}
+                          {clientSubscriptions[client.id] && (
+                            <Badge variant="outline" className="text-xs">
+                              {clientSubscriptions[client.id].length} subscription
+                              {clientSubscriptions[client.id].length !== 1 ? "s" : ""}
+                            </Badge>
+                          )}
+                        </div>
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -886,14 +923,14 @@ export default function InvoicesPage() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="dueDate">Due Date</Label>
+                <Label htmlFor="dueDate">Due Date (Optional)</Label>
                 <Input
                   id="dueDate"
                   type="date"
                   value={formData.dueDate}
                   onChange={(e) => setFormData({ ...formData, dueDate: e.target.value })}
-                  required
                 />
+                <p className="text-xs text-gray-500">Leave empty for no due date</p>
               </div>
 
               <div className="space-y-2">
@@ -919,48 +956,42 @@ export default function InvoicesPage() {
                 <CardDescription>Add client subscriptions or custom items to your invoice</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                {/* Add Client Subscriptions */}
-                {formData.clientId && (
-                  <div className="space-y-2">
-                    <Label>Client Subscriptions</Label>
-                    <div className="flex flex-wrap gap-2">
-                      {getClientSubscriptions(Number.parseInt(formData.clientId)).map((subscription) => (
-                        <Button
-                          key={subscription.id}
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          onClick={() => addSubscriptionItem(subscription.id)}
-                          className="flex items-center gap-2"
-                        >
-                          <Plus className="h-3 w-3" />
-                          {subscription.name} - ${subscription.price}
-                        </Button>
-                      ))}
+                {/* Client Auto-Added Subscriptions Notice */}
+                {formData.clientId && clientSubscriptions[Number.parseInt(formData.clientId)] && (
+                  <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                    <div className="flex items-center gap-2 text-blue-700">
+                      <UserPlus className="h-4 w-4" />
+                      <span className="text-sm font-medium">Client subscriptions automatically added</span>
                     </div>
+                    <p className="text-xs text-blue-600 mt-1">
+                      {clients.find((c) => c.id === Number.parseInt(formData.clientId))?.name}'s subscriptions have been
+                      added to the invoice
+                    </p>
                   </div>
                 )}
 
-                {/* Add All Subscriptions */}
-                <div className="space-y-2">
-                  <Label>All Available Subscriptions</Label>
-                  <Select
-                    onValueChange={(value) => {
-                      addSubscriptionItem(Number.parseInt(value))
-                    }}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Add any subscription..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {subscriptions.map((subscription) => (
-                        <SelectItem key={subscription.id} value={subscription.id.toString()}>
-                          {subscription.name} - ${subscription.price}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
+                {/* Add More Subscriptions */}
+                {getAvailableSubscriptions().length > 0 && (
+                  <div className="space-y-2">
+                    <Label>Add More Subscriptions</Label>
+                    <Select
+                      onValueChange={(value) => {
+                        addSubscriptionItem(Number.parseInt(value))
+                      }}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Add additional subscription..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {getAvailableSubscriptions().map((subscription) => (
+                          <SelectItem key={subscription.id} value={subscription.id.toString()}>
+                            {subscription.name} - ${subscription.price}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
 
                 {/* Add Custom Item */}
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
@@ -994,7 +1025,14 @@ export default function InvoicesPage() {
                       {invoiceItems.map((item) => (
                         <div key={item.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                           <div className="flex-1">
-                            <div className="font-medium">{item.description}</div>
+                            <div className="font-medium flex items-center gap-2">
+                              {item.description}
+                              {item.type === "subscription" && (
+                                <Badge variant="outline" className="text-xs">
+                                  Subscription
+                                </Badge>
+                              )}
+                            </div>
                             <div className="text-sm text-gray-600 flex items-center gap-4">
                               <span>
                                 {getCurrencyFlag(formData.currency)} {item.unitPrice.toFixed(2)} {formData.currency}{" "}
@@ -1168,10 +1206,12 @@ export default function InvoicesPage() {
                       <span className="font-medium">Issue Date:</span>{" "}
                       {new Date(selectedInvoice.issueDate).toLocaleDateString()}
                     </p>
-                    <p>
-                      <span className="font-medium">Due Date:</span>{" "}
-                      {new Date(selectedInvoice.dueDate).toLocaleDateString()}
-                    </p>
+                    {selectedInvoice.dueDate && (
+                      <p>
+                        <span className="font-medium">Due Date:</span>{" "}
+                        {new Date(selectedInvoice.dueDate).toLocaleDateString()}
+                      </p>
+                    )}
                     <p>
                       <span className="font-medium">Currency:</span> {getCurrencyFlag(selectedInvoice.currency)}{" "}
                       {selectedInvoice.currency}
@@ -1201,7 +1241,14 @@ export default function InvoicesPage() {
                     {selectedInvoice.items.map((item) => (
                       <tr key={item.id} className="border-b border-gray-200">
                         <td className="py-4 text-gray-600">
-                          <div>{item.description}</div>
+                          <div className="flex items-center gap-2">
+                            {item.description}
+                            {item.type === "subscription" && (
+                              <Badge variant="outline" className="text-xs">
+                                Subscription
+                              </Badge>
+                            )}
+                          </div>
                           {selectedInvoice.currency !== "USD" && (
                             <div className="text-sm text-gray-500">
                               Original: ${item.originalUnitPrice.toFixed(2)} USD each
@@ -1275,7 +1322,7 @@ export default function InvoicesPage() {
                 <h3 className="text-lg font-semibold text-gray-900 mb-3">Payment Instructions</h3>
                 <p className="text-gray-600 mb-4">
                   {companySettings.paymentTerms ||
-                    `Please make payment by the due date in ${selectedInvoice.currency}. Payment can be made via cash, check, or bank transfer.`}
+                    `Please make payment ${selectedInvoice.dueDate ? "by the due date" : "promptly"} in ${selectedInvoice.currency}. Payment can be made via cash, check, or bank transfer.`}
                 </p>
                 {companySettings.bankDetails && (
                   <div>

@@ -3,50 +3,43 @@
 import { create } from "zustand"
 import { persist } from "zustand/middleware"
 
-export interface ExchangeRate {
+interface ExchangeRate {
   base_currency: string
   target_currency: string
   rate: number
   last_updated: string
   is_manual: boolean
-  manual_updated_at?: string
-  manual_updated_by?: string
-}
-
-export interface ExchangeRateHistory {
-  base_currency: string
-  target_currency: string
-  old_rate: number
-  new_rate: number
-  change_type: string
-  updated_by?: string
-  notes?: string
-  created_at?: string
 }
 
 interface ExchangeRateStore {
   rates: ExchangeRate[]
-  history: ExchangeRateHistory[]
-  lastUpdated: string
+  lastFetched: string | null
   isLoading: boolean
+  error: string | null
 
   // Actions
   setRates: (rates: ExchangeRate[]) => void
-  setHistory: (history: ExchangeRateHistory[]) => void
-  setLastUpdated: (timestamp: string) => void
-  setLoading: (loading: boolean) => void
+  updateRate: (baseCurrency: string, targetCurrency: string, rate: number, isManual?: boolean) => void
+  fetchRates: () => Promise<void>
 
   // Utility functions
-  getRate: (fromCurrency: string, toCurrency: string) => number
-  convertAmount: (amount: number, fromCurrency: string, toCurrency: string) => number
+  getRate: (from: string, to: string) => number
+  convertAmount: (amount: number, from: string, to: string) => number
   getCurrencyFlag: (currency: string) => string
-  getCurrencyName: (currency: string) => string
   getSupportedCurrencies: () => string[]
+}
 
-  // API functions
-  fetchRates: () => Promise<void>
-  updateRate: (currency: string, rate: number, updatedBy: string) => Promise<void>
-  refreshRates: () => Promise<void>
+const currencyFlags: { [key: string]: string } = {
+  USD: "🇺🇸",
+  EUR: "🇪🇺",
+  SRD: "🇸🇷",
+  GBP: "🇬🇧",
+  CAD: "🇨🇦",
+  JPY: "🇯🇵",
+  AUD: "🇦🇺",
+  CHF: "🇨🇭",
+  CNY: "🇨🇳",
+  INR: "🇮🇳",
 }
 
 export const useExchangeRateStore = create<ExchangeRateStore>()(
@@ -70,158 +63,118 @@ export const useExchangeRateStore = create<ExchangeRateStore>()(
         {
           base_currency: "USD",
           target_currency: "SRD",
-          rate: 35.5,
+          rate: 17.74,
+          last_updated: new Date().toISOString(),
+          is_manual: false,
+        },
+        {
+          base_currency: "USD",
+          target_currency: "GBP",
+          rate: 0.79,
+          last_updated: new Date().toISOString(),
+          is_manual: false,
+        },
+        {
+          base_currency: "USD",
+          target_currency: "CAD",
+          rate: 1.35,
           last_updated: new Date().toISOString(),
           is_manual: false,
         },
       ],
-      history: [],
-      lastUpdated: new Date().toISOString(),
+      lastFetched: null,
       isLoading: false,
+      error: null,
 
-      setRates: (rates) => set({ rates }),
-      setHistory: (history) => set({ history }),
-      setLastUpdated: (timestamp) => set({ lastUpdated: timestamp }),
-      setLoading: (loading) => set({ isLoading: loading }),
+      setRates: (rates) => set({ rates, lastFetched: new Date().toISOString(), error: null }),
 
-      getRate: (fromCurrency, toCurrency) => {
-        if (fromCurrency === toCurrency) return 1.0
-
+      updateRate: (baseCurrency, targetCurrency, rate, isManual = true) => {
         const { rates } = get()
+        const updatedRates = rates.map((r) =>
+          r.base_currency === baseCurrency && r.target_currency === targetCurrency
+            ? { ...r, rate, is_manual: isManual, last_updated: new Date().toISOString() }
+            : r,
+        )
 
-        // Direct conversion from USD
-        if (fromCurrency === "USD") {
-          const rate = rates.find((r) => r.target_currency === toCurrency)
-          return rate?.rate || 1.0
+        // If rate doesn't exist, add it
+        const exists = rates.some((r) => r.base_currency === baseCurrency && r.target_currency === targetCurrency)
+        if (!exists) {
+          updatedRates.push({
+            base_currency: baseCurrency,
+            target_currency: targetCurrency,
+            rate,
+            is_manual: isManual,
+            last_updated: new Date().toISOString(),
+          })
         }
 
-        // Conversion to USD
-        if (toCurrency === "USD") {
-          const rate = rates.find((r) => r.target_currency === fromCurrency)
-          return rate ? 1 / rate.rate : 1.0
-        }
-
-        // Cross-currency conversion via USD
-        const fromRate = rates.find((r) => r.target_currency === fromCurrency)
-        const toRate = rates.find((r) => r.target_currency === toCurrency)
-
-        if (fromRate && toRate) {
-          return toRate.rate / fromRate.rate
-        }
-
-        return 1.0
-      },
-
-      convertAmount: (amount, fromCurrency, toCurrency) => {
-        const rate = get().getRate(fromCurrency, toCurrency)
-        return amount * rate
-      },
-
-      getCurrencyFlag: (currency) => {
-        const flags: { [key: string]: string } = {
-          USD: "🇺🇸",
-          EUR: "🇪🇺",
-          SRD: "🇸🇷",
-        }
-        return flags[currency] || "💱"
-      },
-
-      getCurrencyName: (currency) => {
-        const names: { [key: string]: string } = {
-          USD: "US Dollar",
-          EUR: "Euro",
-          SRD: "Surinamese Dollar",
-        }
-        return names[currency] || currency
-      },
-
-      getSupportedCurrencies: () => {
-        const { rates } = get()
-        return rates.map((rate) => rate.target_currency)
+        set({ rates: updatedRates })
       },
 
       fetchRates: async () => {
+        set({ isLoading: true, error: null })
         try {
-          set({ isLoading: true })
           const response = await fetch("/api/exchange-rates")
           const result = await response.json()
 
           if (result.success) {
             set({
               rates: result.data,
-              history: result.history || [],
-              lastUpdated: result.last_updated || new Date().toISOString(),
+              lastFetched: new Date().toISOString(),
+              isLoading: false,
+              error: null,
             })
+          } else {
+            throw new Error(result.error || "Failed to fetch rates")
           }
         } catch (error) {
           console.error("Failed to fetch exchange rates:", error)
-        } finally {
-          set({ isLoading: false })
+          set({
+            isLoading: false,
+            error: error instanceof Error ? error.message : "Failed to fetch rates",
+          })
         }
       },
 
-      updateRate: async (currency, rate, updatedBy) => {
-        try {
-          set({ isLoading: true })
-          const response = await fetch("/api/exchange-rates", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              action: "update_manual",
-              currency,
-              rate,
-              updated_by: updatedBy,
-            }),
-          })
+      getRate: (from, to) => {
+        if (from === to) return 1.0
 
-          const result = await response.json()
-          if (result.success) {
-            set({
-              rates: result.data,
-              history: result.history || [],
-              lastUpdated: new Date().toISOString(),
-            })
-          }
-        } catch (error) {
-          console.error("Failed to update exchange rate:", error)
-        } finally {
-          set({ isLoading: false })
-        }
+        const { rates } = get()
+        const rate = rates.find((r) => r.base_currency === from && r.target_currency === to)
+
+        if (rate) return rate.rate
+
+        // Try reverse conversion
+        const reverseRate = rates.find((r) => r.base_currency === to && r.target_currency === from)
+        if (reverseRate) return 1 / reverseRate.rate
+
+        // Default fallback
+        return 1.0
       },
 
-      refreshRates: async () => {
-        try {
-          set({ isLoading: true })
-          const response = await fetch("/api/exchange-rates", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              action: "fetch_latest",
-              updated_by: "manual_refresh",
-            }),
-          })
+      convertAmount: (amount, from, to) => {
+        const rate = get().getRate(from, to)
+        return amount * rate
+      },
 
-          const result = await response.json()
-          if (result.success) {
-            set({
-              rates: result.data,
-              history: result.history || [],
-              lastUpdated: new Date().toISOString(),
-            })
-          }
-        } catch (error) {
-          console.error("Failed to refresh exchange rates:", error)
-        } finally {
-          set({ isLoading: false })
-        }
+      getCurrencyFlag: (currency) => {
+        return currencyFlags[currency] || "💱"
+      },
+
+      getSupportedCurrencies: () => {
+        const { rates } = get()
+        const currencies = new Set<string>()
+        rates.forEach((rate) => {
+          currencies.add(rate.target_currency)
+        })
+        return Array.from(currencies).sort()
       },
     }),
     {
       name: "exchange-rates-storage",
       partialize: (state) => ({
         rates: state.rates,
-        history: state.history,
-        lastUpdated: state.lastUpdated,
+        lastFetched: state.lastFetched,
       }),
     },
   ),

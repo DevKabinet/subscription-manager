@@ -25,8 +25,8 @@ export default function DashboardLayout({
   const [isExchangeRateModalOpen, setIsExchangeRateModalOpen] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
 
-  const { settings, updateSettings, isConfigured } = useCompanySettingsStore()
-  const { fetchRates } = useExchangeRateStore()
+  const { settings, updateSettings, isSetupComplete } = useCompanySettingsStore()
+  const { fetchRates, lastFetched } = useExchangeRateStore()
 
   const [formSettings, setFormSettings] = useState(settings)
 
@@ -38,8 +38,12 @@ export default function DashboardLayout({
     }
 
     // Initialize global exchange rates on app load
-    fetchRates()
-  }, [router, fetchRates])
+    const shouldFetch = !lastFetched || new Date().getTime() - new Date(lastFetched).getTime() > 24 * 60 * 60 * 1000 // 24 hours
+
+    if (shouldFetch) {
+      fetchRates()
+    }
+  }, [router, fetchRates, lastFetched])
 
   useEffect(() => {
     setFormSettings(settings)
@@ -79,7 +83,7 @@ export default function DashboardLayout({
           <div className="flex justify-between items-center py-4">
             <div className="flex items-center gap-4">
               <h1 className="text-2xl font-bold text-gray-900">Subscription Manager</h1>
-              {!isConfigured() && (
+              {!isSetupComplete && (
                 <Badge variant="destructive" className="text-xs">
                   Setup Required
                 </Badge>
@@ -121,7 +125,19 @@ export default function DashboardLayout({
 
       <DashboardNav />
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">{children}</main>
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {!isSetupComplete && (
+          <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+            <div className="flex items-center gap-2">
+              <span className="text-yellow-600 font-medium">⚠️ Setup Required</span>
+            </div>
+            <p className="text-sm text-yellow-700 mt-1">
+              Please complete your company settings to generate professional invoices.
+            </p>
+          </div>
+        )}
+        {children}
+      </main>
 
       {/* Company Settings Modal */}
       <Dialog open={isSettingsModalOpen} onOpenChange={setIsSettingsModalOpen}>
@@ -155,7 +171,6 @@ export default function DashboardLayout({
                 required
               />
             </div>
-
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="phone">Phone *</Label>
