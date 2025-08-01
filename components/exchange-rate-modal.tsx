@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { RefreshCw, Edit, Save, X, TrendingUp, Clock, DollarSign, History, Shield, AlertTriangle } from "lucide-react"
+import { RefreshCw, Edit, Save, X, TrendingUp, Clock, DollarSign, History, Shield, AlertTriangle, Check } from "lucide-react"
 
 interface ExchangeRate {
   base_currency: string
@@ -338,7 +338,7 @@ export function ExchangeRateModal({ isOpen, onClose }: ExchangeRateModalProps) {
                               {editingCurrency === rate.target_currency ? (
                                 <div className="flex gap-1">
                                   <Button size="sm" onClick={handleSave} disabled={loading} className="h-8 w-8 p-0">
-                                    <Save className="h-4 w-4" />
+                                    <Check className="h-4 w-4" />
                                   </Button>
                                   <Button
                                     size="sm"
