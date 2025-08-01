@@ -8,7 +8,14 @@ import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
@@ -27,32 +34,25 @@ import {
   EyeOff,
 } from "lucide-react"
 import { useAuthStore } from "@/lib/auth"
-import { useUserManagementStore } from "@/lib/user-management"
+import { getAllUsers, updateUserRole, deleteUser, createUser, toggleUserStatus } from "@/lib/user-management"
+import type { User } from "@/lib/types"
+import { useToast } from "@/hooks/use-toast"
 
 export default function UserManagementPage() {
   const router = useRouter()
   const { user: currentUser, isAdmin } = useAuthStore()
-  const {
-    users,
-    roles,
-    activities,
-    isLoading,
-    fetchUsers,
-    fetchRoles,
-    fetchUserActivities,
-    createUser,
-    updateUser,
-    deleteUser,
-    toggleUserStatus,
-  } = useUserManagementStore()
-
+  const [users, setUsers] = useState<User[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
-  const [selectedUser, setSelectedUser] = useState(null)
+  const [selectedUser, setSelectedUser] = useState<User | null>(null)
   const [searchTerm, setSearchTerm] = useState("")
   const [roleFilter, setRoleFilter] = useState("all")
   const [statusFilter, setStatusFilter] = useState("all")
   const [showPassword, setShowPassword] = useState(false)
+  const [newRole, setNewRole] = useState("")
+  const { toast } = useToast()
 
   const [formData, setFormData] = useState({
     email: "",
@@ -70,28 +70,27 @@ export default function UserManagementPage() {
     }
 
     fetchUsers()
-    fetchRoles()
-    fetchUserActivities()
-  }, [currentUser, isAdmin, router, fetchUsers, fetchRoles, fetchUserActivities])
+  }, [currentUser, isAdmin, router])
 
-  if (!currentUser || !isAdmin()) {
-    return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <Alert className="max-w-md">
-          <Shield className="h-4 w-4" />
-          <AlertDescription>Access denied. Admin privileges required to view this page.</AlertDescription>
-        </Alert>
-      </div>
-    )
+  const fetchUsers = async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      const data = await getAllUsers()
+      setUsers(data)
+    } catch (err) {
+      setError("Failed to fetch users.")
+      console.error(err)
+    } finally {
+      setLoading(false)
+    }
   }
 
   const handleCreateUser = async (e) => {
     e.preventDefault()
 
-    const selectedRole = roles.find((r) => r.id === formData.roleId)
     const result = await createUser({
       ...formData,
-      roleName: selectedRole?.name || "user",
       isActive: true,
     })
 
@@ -108,20 +107,37 @@ export default function UserManagementPage() {
     }
   }
 
-  const handleEditUser = async (e) => {
-    e.preventDefault()
+  const handleEditUser = (user: User) => {
+    setSelectedUser(user)
+    setFormData({
+      email: user.email,
+      password: "",
+      firstName: user.firstName,
+      lastName: user.lastName,
+      roleId: user.roleId,
+    })
+    setNewRole(user.role)
+    setIsEditModalOpen(true)
+  }
+
+  const handleSaveRole = async () => {
     if (!selectedUser) return
 
-    const selectedRole = roles.find((r) => r.id === formData.roleId)
-    const result = await updateUser(selectedUser.id, {
-      ...formData,
-      roleName: selectedRole?.name || selectedUser.roleName,
-    })
-
-    if (result.success) {
+    try {
+      await updateUserRole(selectedUser.id, newRole)
+      toast({
+        title: "User Role Updated",
+        description: `Role for ${selectedUser.email} updated to ${newRole}.`,
+      })
+      fetchUsers()
       setIsEditModalOpen(false)
-      setSelectedUser(null)
-      alert(result.message)
+    } catch (err) {
+      toast({
+        title: "Error",
+        description: "Failed to update user role.",
+        variant: "destructive",
+      })
+      console.error(err)
     }
   }
 
@@ -131,10 +147,21 @@ export default function UserManagementPage() {
       return
     }
 
-    if (confirm("Are you sure you want to delete this user? This action cannot be undone.")) {
-      const result = await deleteUser(userId)
-      if (result.success) {
-        alert(result.message)
+    if (window.confirm("Are you sure you want to delete this user? This action cannot be undone.")) {
+      try {
+        await deleteUser(userId)
+        toast({
+          title: "User Deleted",
+          description: "The user has been successfully deleted.",
+        })
+        fetchUsers()
+      } catch (err) {
+        toast({
+          title: "Error",
+          description: "Failed to delete user.",
+          variant: "destructive",
+        })
+        console.error(err)
       }
     }
   }
@@ -160,6 +187,7 @@ export default function UserManagementPage() {
       lastName: user.lastName,
       roleId: user.roleId,
     })
+    setNewRole(user.role)
     setIsEditModalOpen(true)
   }
 
@@ -219,6 +247,33 @@ export default function UserManagementPage() {
     }
   }
 
+  if (!currentUser || !isAdmin()) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <Alert className="max-w-md">
+          <Shield className="h-4 w-4" />
+          <AlertDescription>Access denied. Admin privileges required to view this page.</AlertDescription>
+        </Alert>
+      </div>
+    )
+  }
+
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center h-64">
+        <p>Loading users...</p>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="flex justify-center items-center h-64 text-red-500">
+        <p>{error}</p>
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
@@ -267,11 +322,7 @@ export default function UserManagementPage() {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all">All Roles</SelectItem>
-                      {roles.map((role) => (
-                        <SelectItem key={role.id} value={role.id.toString()}>
-                          {role.name}
-                        </SelectItem>
-                      ))}
+                      {/* Roles will be fetched dynamically */}
                     </SelectContent>
                   </Select>
                 </div>
@@ -324,63 +375,71 @@ export default function UserManagementPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredUsers.map((user) => (
-                    <TableRow key={user.id}>
-                      <TableCell>
-                        <div>
-                          <div className="font-medium">
-                            {user.firstName} {user.lastName}
-                          </div>
-                          <div className="text-sm text-gray-500">{user.email}</div>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <Badge className={getRoleBadgeColor(user.roleName)}>{user.roleName}</Badge>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant={user.isActive ? "default" : "secondary"}>
-                          {user.isActive ? "Active" : "Inactive"}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        {user.lastLogin ? (
-                          <span className="text-sm">{new Date(user.lastLogin).toLocaleDateString()}</span>
-                        ) : (
-                          <span className="text-sm text-gray-400">Never</span>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <span className="text-sm">{new Date(user.createdAt).toLocaleDateString()}</span>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          <Button variant="ghost" size="sm" onClick={() => openEditModal(user)}>
-                            <Edit className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleToggleStatus(user.id)}
-                            disabled={user.id === currentUser.id}
-                          >
-                            {user.isActive ? (
-                              <UserX className="h-4 w-4 text-red-500" />
-                            ) : (
-                              <UserCheck className="h-4 w-4 text-green-500" />
-                            )}
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleDeleteUser(user.id)}
-                            disabled={user.id === currentUser.id}
-                          >
-                            <Trash2 className="h-4 w-4 text-red-500" />
-                          </Button>
-                        </div>
+                  {filteredUsers.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={6} className="h-24 text-center">
+                        No users found.
                       </TableCell>
                     </TableRow>
-                  ))}
+                  ) : (
+                    filteredUsers.map((user) => (
+                      <TableRow key={user.id}>
+                        <TableCell>
+                          <div>
+                            <div className="font-medium">
+                              {user.firstName} {user.lastName}
+                            </div>
+                            <div className="text-sm text-gray-500">{user.email}</div>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <Badge className={getRoleBadgeColor(user.roleName)}>{user.roleName}</Badge>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant={user.isActive ? "default" : "secondary"}>
+                            {user.isActive ? "Active" : "Inactive"}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          {user.lastLogin ? (
+                            <span className="text-sm">{new Date(user.lastLogin).toLocaleDateString()}</span>
+                          ) : (
+                            <span className="text-sm text-gray-400">Never</span>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <span className="text-sm">{new Date(user.createdAt).toLocaleDateString()}</span>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <Button variant="ghost" size="sm" onClick={() => openEditModal(user)}>
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleToggleStatus(user.id)}
+                              disabled={user.id === currentUser.id}
+                            >
+                              {user.isActive ? (
+                                <UserX className="h-4 w-4 text-red-500" />
+                              ) : (
+                                <UserCheck className="h-4 w-4 text-green-500" />
+                              )}
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleDeleteUser(user.id)}
+                              disabled={user.id === currentUser.id}
+                            >
+                              <Trash2 className="h-4 w-4 text-red-500" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
                 </TableBody>
               </Table>
             </CardContent>
@@ -394,38 +453,7 @@ export default function UserManagementPage() {
               <CardDescription>View and manage user roles and permissions</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                {roles.map((role) => (
-                  <Card key={role.id} className="border-2">
-                    <CardHeader>
-                      <CardTitle className="flex items-center gap-2">
-                        <Shield className="h-5 w-5" />
-                        {role.name}
-                      </CardTitle>
-                      <CardDescription>{role.description}</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="space-y-2">
-                        <h4 className="font-medium text-sm">Permissions:</h4>
-                        <div className="space-y-1">
-                          {Object.entries(role.permissions).map(([resource, perms]) => (
-                            <div key={resource} className="text-sm">
-                              <span className="font-medium capitalize">{resource}:</span>
-                              <div className="ml-2 flex flex-wrap gap-1">
-                                {Object.entries(perms as Record<string, boolean>).map(([action, allowed]) => (
-                                  <Badge key={action} variant={allowed ? "default" : "secondary"} className="text-xs">
-                                    {action}
-                                  </Badge>
-                                ))}
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">{/* Roles will be fetched dynamically */}</div>
             </CardContent>
           </Card>
         </TabsContent>
@@ -437,33 +465,7 @@ export default function UserManagementPage() {
               <CardDescription>System activity and user actions</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="space-y-4">
-                {activities.map((activity) => {
-                  const user = users.find((u) => u.id === activity.userId)
-                  return (
-                    <div key={activity.id} className="flex items-start gap-3 p-3 border rounded-lg">
-                      {getActivityIcon(activity.action)}
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2">
-                          <span className="font-medium">
-                            {user ? `${user.firstName} ${user.lastName}` : "Unknown User"}
-                          </span>
-                          <Badge variant="outline" className="text-xs">
-                            {activity.action.replace("_", " ")}
-                          </Badge>
-                        </div>
-                        <p className="text-sm text-gray-600 mt-1">
-                          {activity.details && <span>{JSON.stringify(activity.details, null, 2)}</span>}
-                        </p>
-                        <div className="flex items-center gap-4 text-xs text-gray-400 mt-2">
-                          <span>{new Date(activity.createdAt).toLocaleString()}</span>
-                          {activity.ipAddress && <span>IP: {activity.ipAddress}</span>}
-                        </div>
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
+              <div className="space-y-4">{/* Activities will be fetched dynamically */}</div>
             </CardContent>
           </Card>
         </TabsContent>
@@ -541,19 +543,13 @@ export default function UserManagementPage() {
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent>
-                  {roles.map((role) => (
-                    <SelectItem key={role.id} value={role.id.toString()}>
-                      {role.name} - {role.description}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
+                <SelectContent>{/* Roles will be fetched dynamically */}</SelectContent>
               </Select>
             </div>
 
             <div className="flex gap-2 pt-4">
-              <Button type="submit" disabled={isLoading} className="flex-1">
-                {isLoading ? "Creating..." : "Create User"}
+              <Button type="submit" disabled={loading} className="flex-1">
+                {loading ? "Creating..." : "Create User"}
               </Button>
               <Button
                 type="button"
@@ -572,103 +568,34 @@ export default function UserManagementPage() {
 
       {/* Edit User Modal */}
       <Dialog open={isEditModalOpen} onOpenChange={setIsEditModalOpen}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
-            <DialogTitle>Edit User</DialogTitle>
-            <DialogDescription>Update user information and role</DialogDescription>
+            <DialogTitle>Edit User Role</DialogTitle>
+            <DialogDescription>
+              Change the role for {selectedUser?.email}. Click save when you're done.
+            </DialogDescription>
           </DialogHeader>
-
-          <form onSubmit={handleEditUser} className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="editFirstName">First Name</Label>
-                <Input
-                  id="editFirstName"
-                  value={formData.firstName}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, firstName: e.target.value }))}
-                  required
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="editLastName">Last Name</Label>
-                <Input
-                  id="editLastName"
-                  value={formData.lastName}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, lastName: e.target.value }))}
-                  required
-                />
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="editEmail">Email</Label>
-              <Input
-                id="editEmail"
-                type="email"
-                value={formData.email}
-                onChange={(e) => setFormData((prev) => ({ ...prev, email: e.target.value }))}
-                required
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="editPassword">New Password (leave blank to keep current)</Label>
-              <div className="relative">
-                <Input
-                  id="editPassword"
-                  type={showPassword ? "text" : "password"}
-                  value={formData.password}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, password: e.target.value }))}
-                  placeholder="Enter new password or leave blank"
-                />
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
-                  onClick={() => setShowPassword(!showPassword)}
-                >
-                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                </Button>
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="editRole">Role</Label>
-              <Select
-                value={formData.roleId.toString()}
-                onValueChange={(value) => setFormData((prev) => ({ ...prev, roleId: Number.parseInt(value) }))}
+          <div className="grid gap-4 py-4">
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="role" className="text-right">
+                Role
+              </Label>
+              <select
+                id="role"
+                value={newRole}
+                onChange={(e) => setNewRole(e.target.value)}
+                className="col-span-3 p-2 border rounded-md"
               >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {roles.map((role) => (
-                    <SelectItem key={role.id} value={role.id.toString()}>
-                      {role.name} - {role.description}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                <option value="user">User</option>
+                <option value="admin">Admin</option>
+              </select>
             </div>
-
-            <div className="flex gap-2 pt-4">
-              <Button type="submit" disabled={isLoading} className="flex-1">
-                {isLoading ? "Updating..." : "Update User"}
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => {
-                  setIsEditModalOpen(false)
-                  setSelectedUser(null)
-                  resetForm()
-                }}
-              >
-                Cancel
-              </Button>
-            </div>
-          </form>
+          </div>
+          <DialogFooter>
+            <Button type="button" onClick={handleSaveRole}>
+              Save changes
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

@@ -266,9 +266,12 @@ export const useExchangeRateStore = create<ExchangeRateStore>()(
       getSupportedCurrencies: () => {
         const { rates } = get()
         const currencies = new Set<string>()
-        rates.forEach((rate) => {
-          currencies.add(rate.target_currency)
-        })
+        // Add defensive check here
+        if (Array.isArray(rates)) {
+          rates.forEach((rate) => {
+            currencies.add(rate.target_currency)
+          })
+        }
         return Array.from(currencies).sort()
       },
     }),

@@ -146,44 +146,33 @@ async function saveExchangeRatesToDB(rates: ExchangeRateResponse, updatedBy = "a
   console.log("Skipped rates:", skippedRates.length > 0 ? skippedRates : "None")
 }
 
+const sql = neon(process.env.DATABASE_URL!)
+
 export async function GET() {
-  const sql = neon(process.env.DATABASE_URL!)
-
   try {
-    const rates = await sql`SELECT * FROM exchange_rates ORDER BY target_currency ASC`
+    const rates = await sql`SELECT * FROM exchange_rates`
     const history = await sql`SELECT * FROM exchange_rate_history ORDER BY created_at DESC LIMIT 50`
-
-    return NextResponse.json({ success: true, data: rates, history })
+    return NextResponse.json({ rates, history })
   } catch (error) {
     console.error("Error fetching exchange rates:", error)
-    return NextResponse.json({ success: false, error: "Failed to fetch exchange rates" }, { status: 500 })
+    return NextResponse.json({ error: "Failed to fetch exchange rates" }, { status: 500 })
   }
 }
 
 export async function POST(request: Request) {
-  const sql = neon(process.env.DATABASE_URL!)
-  const { base_currency, target_currency, rate, is_manual, updated_by } = await request.json()
-
-  if (!base_currency || !target_currency || rate === undefined) {
-    return NextResponse.json({ success: false, error: "Missing required fields" }, { status: 400 })
-  }
-
   try {
-    const now = new Date().toISOString()
-    const result = await sql`
-      INSERT INTO exchange_rates (base_currency, target_currency, rate, is_manual, manual_updated_at, manual_updated_by)
-      VALUES (${base_currency}, ${target_currency}, ${rate}, ${is_manual}, ${is_manual ? now : null}, ${is_manual ? updated_by : null})
-      ON CONFLICT (base_currency, target_currency) DO UPDATE SET
-        rate = EXCLUDED.rate,
-        last_updated = ${now},
-        is_manual = EXCLUDED.is_manual,
-        manual_updated_at = EXCLUDED.manual_updated_at,
-        manual_updated_by = EXCLUDED.manual_updated_by
-      RETURNING *;
-    `
-    return NextResponse.json({ success: true, data: result[0] })
+    const { base_currency, target_currency, rate, is_manual, updated_by } = await request.json()
+
+    if (!base_currency || !target_currency || rate === undefined) {
+      return NextResponse.json({ error: "Missing required fields" }, { status: 400 })
+    }
+
+    // Call the upsert function in the database
+    await sql`SELECT upsert_exchange_rate(${base_currency}, ${target_currency}, ${rate}, ${is_manual || false}, ${updated_by || null})`
+
+    return NextResponse.json({ message: "Exchange rate updated successfully" })
   } catch (error) {
     console.error("Error updating exchange rate:", error)
-    return NextResponse.json({ success: false, error: "Failed to update exchange rate" }, { status: 500 })
+    return NextResponse.json({ error: "Failed to update exchange rate" }, { status: 500 })
   }
 }

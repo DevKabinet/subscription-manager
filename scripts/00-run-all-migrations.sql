@@ -37,25 +37,25 @@
 \i scripts/05-exchange-rates.sql
 
 -- =====================================================
--- 06: Create indexes for performance
+-- 06: Create production user
+-- =====================================================
+
+-- Run 06-create-production-user.sql
+\i scripts/06-create-production-user.sql
+
+-- =====================================================
+-- 07: Update exchange rates logic
 -- =====================================================
 
 -- Run 07-update-exchange-rates-logic.sql
 \i scripts/07-update-exchange-rates-logic.sql
 
 -- =====================================================
--- 07: User management system
+-- 08: User management system
 -- =====================================================
 
 -- Run 08-user-management-system.sql
 \i scripts/08-user-management-system.sql
-
--- =====================================================
--- 08: Create production user
--- =====================================================
-
--- Run 06-create-production-user.sql
-\i scripts/06-create-production-user.sql
 
 -- =====================================================
 -- Migration completed successfully

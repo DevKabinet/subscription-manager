@@ -1,6 +1,11 @@
 "use client"
 
 import { create } from "zustand"
+import { neon } from "@neondatabase/serverless"
+import bcrypt from "bcryptjs"
+import type { User } from "./types"
+
+const sql = neon(process.env.DATABASE_URL!)
 
 export interface Role {
   id: number
@@ -9,20 +14,6 @@ export interface Role {
   permissions: Record<string, any>
   createdAt: string
   updatedAt: string
-}
-
-export interface User {
-  id: number
-  email: string
-  firstName: string
-  lastName: string
-  roleId: number
-  roleName: string
-  isActive: boolean
-  lastLogin?: string
-  createdAt: string
-  updatedAt: string
-  createdBy?: number
 }
 
 export interface UserActivity {
@@ -43,10 +34,15 @@ interface UserManagementState {
 
   // User operations
   fetchUsers: () => Promise<void>
-  createUser: (userData: Omit<User, "id" | "createdAt" | "updatedAt">) => Promise<{ success: boolean; message: string }>
+  createUser: (email: string, password: string) => Promise<{ success: boolean; message: string }>
   updateUser: (id: number, userData: Partial<User>) => Promise<{ success: boolean; message: string }>
   deleteUser: (id: number) => Promise<{ success: boolean; message: string }>
   toggleUserStatus: (id: number) => Promise<{ success: boolean; message: string }>
+  getUserByEmail: (email: string) => Promise<User | undefined>
+  getUserById: (id: string) => Promise<User | undefined>
+  verifyPassword: (password: string, hash: string) => Promise<boolean>
+  getAllUsers: () => Promise<User[]>
+  updateUserRole: (id: string, newRole: string) => Promise<User | undefined>
 
   // Role operations
   fetchRoles: () => Promise<void>
@@ -181,19 +177,12 @@ export const useUserManagementStore = create<UserManagementState>((set, get) => 
     set({ users: mockUsers, isLoading: false })
   },
 
-  createUser: async (userData) => {
+  createUser: async (email, password) => {
     set({ isLoading: true })
-    await new Promise((resolve) => setTimeout(resolve, 1000))
-
-    const newUser: User = {
-      ...userData,
-      id: Date.now(),
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    }
-
+    const passwordHash = await bcrypt.hash(password, 10)
+    const user = await createUser(email, passwordHash)
     set((state) => ({
-      users: [...state.users, newUser],
+      users: [...state.users, user],
       isLoading: false,
     }))
 
@@ -247,9 +236,49 @@ export const useUserManagementStore = create<UserManagementState>((set, get) => 
     }
   },
 
+  getUserByEmail: async (email) => {
+    set({ isLoading: true })
+    await new Promise((resolve) => setTimeout(resolve, 500))
+    const user = await getUserByEmail(email)
+    set({ isLoading: false })
+    return user
+  },
+
+  getUserById: async (id) => {
+    set({ isLoading: true })
+    await new Promise((resolve) => setTimeout(resolve, 500))
+    const user = await getUserById(id)
+    set({ isLoading: false })
+    return user
+  },
+
+  verifyPassword: async (password, hash) => {
+    return await verifyPassword(password, hash)
+  },
+
+  getAllUsers: async () => {
+    set({ isLoading: true })
+    await new Promise((resolve) => setTimeout(resolve, 500))
+    const users = await getAllUsers()
+    set({ users, isLoading: false })
+    return users
+  },
+
+  updateUserRole: async (id, newRole) => {
+    set({ isLoading: true })
+    await new Promise((resolve) => setTimeout(resolve, 500))
+    const user = await updateUserRole(id, newRole)
+    set((state) => ({
+      users: state.users.map((u) => (u.id === id ? { ...u, role: newRole, updatedAt: new Date().toISOString() } : u)),
+      isLoading: false,
+    }))
+    return user
+  },
+
   fetchRoles: async () => {
     set({ isLoading: true })
     await new Promise((resolve) => setTimeout(resolve, 300))
+
     set({ roles: mockRoles, isLoading: false })
   },
 
@@ -322,3 +351,60 @@ export const useUserManagementStore = create<UserManagementState>((set, get) => 
     }))
   },
 }))
+
+async function createUser(email: string, password_hash: string, role = "user"): Promise<User> {
+  const [user] = await sql`
+    INSERT INTO users (email, password_hash, role)
+    VALUES (${email}, ${password_hash}, ${role})
+    RETURNING id, email, role, created_at, updated_at;
+  `
+  return user as User
+}
+
+async function getUserByEmail(email: string): Promise<User | undefined> {
+  const [user] = await sql`
+    SELECT id, email, password_hash, role, created_at, updated_at
+    FROM users
+    WHERE email = ${email};
+  `
+  return user as User | undefined
+}
+
+async function getUserById(id: string): Promise<User | undefined> {
+  const [user] = await sql`
+    SELECT id, email, role, created_at, updated_at
+    FROM users
+    WHERE id = ${id};
+  `
+  return user as User | undefined
+}
+
+async function verifyPassword(password: string, hash: string): Promise<boolean> {
+  return bcrypt.compare(password, hash)
+}
+
+async function getAllUsers(): Promise<User[]> {
+  const users = await sql`
+    SELECT id, email, role, created_at, updated_at
+    FROM users
+    ORDER BY created_at DESC;
+  `
+  return users as User[]
+}
+
+async function updateUserRole(id: string, newRole: string): Promise<User | undefined> {
+  const [user] = await sql`
+    UPDATE users
+    SET role = ${newRole}, updated_at = CURRENT_TIMESTAMP
+    WHERE id = ${id}
+    RETURNING id, email, role, created_at, updated_at;
+  `
+  return user as User | undefined
+}
+
+async function deleteUser(id: string): Promise<void> {
+  await sql`
+    DELETE FROM users
+    WHERE id = ${id};
+  `
+}
