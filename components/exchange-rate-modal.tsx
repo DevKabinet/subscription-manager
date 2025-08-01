@@ -9,28 +9,8 @@ import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { RefreshCw, Edit, Save, X, TrendingUp, Clock, DollarSign, History, Shield, AlertTriangle, Check } from "lucide-react"
-
-interface ExchangeRate {
-  base_currency: string
-  target_currency: string
-  rate: number
-  last_updated: string
-  is_manual: boolean
-  manual_updated_at?: string
-  manual_updated_by?: string
-}
-
-interface ExchangeRateHistory {
-  base_currency: string
-  target_currency: string
-  old_rate: number
-  new_rate: number
-  change_type: string
-  updated_by?: string
-  notes?: string
-  created_at?: string
-}
+import { RefreshCw, Edit, X, TrendingUp, Clock, DollarSign, History, Shield, Check } from "lucide-react"
+import { useExchangeRateStore } from "@/lib/exchange-rates"
 
 interface ExchangeRateModalProps {
   isOpen: boolean
@@ -38,68 +18,26 @@ interface ExchangeRateModalProps {
 }
 
 export function ExchangeRateModal({ isOpen, onClose }: ExchangeRateModalProps) {
-  const [exchangeRates, setExchangeRates] = useState<ExchangeRate[]>([])
-  const [history, setHistory] = useState<ExchangeRateHistory[]>([])
-  const [loading, setLoading] = useState(false)
+  const {
+    rates,
+    history,
+    lastUpdated,
+    isLoading,
+    fetchRates,
+    updateRate,
+    refreshRates,
+    getCurrencyFlag,
+    getCurrencyName,
+  } = useExchangeRateStore()
+
   const [editingCurrency, setEditingCurrency] = useState<string | null>(null)
   const [editValue, setEditValue] = useState("")
-  const [lastUpdated, setLastUpdated] = useState<string>("")
 
   useEffect(() => {
-    if (isOpen) {
-      fetchExchangeRates()
+    if (isOpen && rates.length <= 3) {
+      fetchRates()
     }
-  }, [isOpen])
-
-  const fetchExchangeRates = async () => {
-    try {
-      setLoading(true)
-      const response = await fetch("/api/exchange-rates")
-      const result = await response.json()
-
-      if (result.success) {
-        setExchangeRates(result.data)
-        setHistory(result.history || [])
-        setLastUpdated(result.last_updated)
-      }
-    } catch (error) {
-      console.error("Failed to fetch exchange rates:", error)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const updateExchangeRates = async () => {
-    try {
-      setLoading(true)
-      const response = await fetch("/api/exchange-rates", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          action: "fetch_latest",
-          updated_by: "manual_refresh",
-        }),
-      })
-
-      const result = await response.json()
-
-      if (result.success) {
-        setExchangeRates(result.data)
-        setHistory(result.history || [])
-        setLastUpdated(new Date().toISOString())
-        alert(result.message || "Exchange rates updated successfully!")
-      } else {
-        alert("Failed to update exchange rates: " + result.error)
-      }
-    } catch (error) {
-      console.error("Failed to update exchange rates:", error)
-      alert("Failed to update exchange rates")
-    } finally {
-      setLoading(false)
-    }
-  }
+  }, [isOpen, fetchRates, rates.length])
 
   const handleEdit = (currency: string, currentRate: number) => {
     setEditingCurrency(currency)
@@ -109,73 +47,9 @@ export function ExchangeRateModal({ isOpen, onClose }: ExchangeRateModalProps) {
   const handleSave = async () => {
     if (!editingCurrency || !editValue) return
 
-    try {
-      setLoading(true)
-      const response = await fetch("/api/exchange-rates", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          action: "update_manual",
-          currency: editingCurrency,
-          rate: editValue,
-          updated_by: "user_manual",
-        }),
-      })
-
-      const result = await response.json()
-
-      if (result.success) {
-        setExchangeRates(result.data)
-        setHistory(result.history || [])
-        setEditingCurrency(null)
-        setEditValue("")
-        alert(result.message || `${editingCurrency} rate updated successfully!`)
-      } else {
-        alert("Failed to update rate: " + result.error)
-      }
-    } catch (error) {
-      console.error("Failed to update rate:", error)
-      alert("Failed to update rate")
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const handleResetManual = async (currency: string) => {
-    if (!confirm(`Reset manual override for ${currency}? This will allow API updates to resume.`)) {
-      return
-    }
-
-    try {
-      setLoading(true)
-      const response = await fetch("/api/exchange-rates", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          action: "reset_manual",
-          currency: currency,
-          updated_by: "user_reset",
-        }),
-      })
-
-      const result = await response.json()
-
-      if (result.success) {
-        setExchangeRates(result.data)
-        alert(result.message || `${currency} manual override reset successfully!`)
-      } else {
-        alert("Failed to reset manual override: " + result.error)
-      }
-    } catch (error) {
-      console.error("Failed to reset manual override:", error)
-      alert("Failed to reset manual override")
-    } finally {
-      setLoading(false)
-    }
+    await updateRate(editingCurrency, Number.parseFloat(editValue), "user_manual")
+    setEditingCurrency(null)
+    setEditValue("")
   }
 
   const handleCancel = () => {
@@ -183,22 +57,8 @@ export function ExchangeRateModal({ isOpen, onClose }: ExchangeRateModalProps) {
     setEditValue("")
   }
 
-  const getCurrencyFlag = (currency: string) => {
-    const flags: { [key: string]: string } = {
-      USD: "🇺🇸",
-      EUR: "🇪🇺",
-      SRD: "🇸🇷",
-    }
-    return flags[currency] || "💱"
-  }
-
-  const getCurrencyName = (currency: string) => {
-    const names: { [key: string]: string } = {
-      USD: "US Dollar",
-      EUR: "Euro",
-      SRD: "Surinamese Dollar",
-    }
-    return names[currency] || currency
+  const handleRefresh = async () => {
+    await refreshRates()
   }
 
   const formatLastUpdated = (dateString: string) => {
@@ -215,7 +75,7 @@ export function ExchangeRateModal({ isOpen, onClose }: ExchangeRateModalProps) {
     }
   }
 
-  const isManuallyProtected = (rate: ExchangeRate) => {
+  const isManuallyProtected = (rate: any) => {
     if (!rate.is_manual || !rate.manual_updated_at) return false
 
     const manualUpdateTime = new Date(rate.manual_updated_at)
@@ -231,9 +91,9 @@ export function ExchangeRateModal({ isOpen, onClose }: ExchangeRateModalProps) {
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <DollarSign className="h-5 w-5 text-green-500" />
-            Exchange Rates Management
+            Global Exchange Rates Management
           </DialogTitle>
-          <DialogDescription>View and manage currency exchange rates with manual override protection</DialogDescription>
+          <DialogDescription>Manage global currency exchange rates used throughout the application</DialogDescription>
         </DialogHeader>
 
         <Tabs defaultValue="rates" className="space-y-4">
@@ -249,18 +109,19 @@ export function ExchangeRateModal({ isOpen, onClose }: ExchangeRateModalProps) {
                 <Clock className="h-4 w-4" />
                 <span>Last updated: {lastUpdated ? formatLastUpdated(lastUpdated) : "Never"}</span>
               </div>
-              <Button onClick={updateExchangeRates} disabled={loading} size="sm" className="flex items-center gap-2">
-                <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
-                Update Rates
+              <Button onClick={handleRefresh} disabled={isLoading} size="sm" className="flex items-center gap-2">
+                <RefreshCw className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`} />
+                Update Global Rates
               </Button>
             </div>
 
-            {/* Manual Override Alert */}
+            {/* Global Usage Alert */}
             <Alert>
               <Shield className="h-4 w-4" />
               <AlertDescription>
-                <strong>Manual Override Protection:</strong> Manually updated rates are protected from API updates for
-                24 hours. This prevents your custom rates from being overwritten by automatic daily updates.
+                <strong>Global Exchange Rates:</strong> These rates are used throughout the entire application for all
+                currency conversions in payments, invoices, and reports. Changes here will affect all future
+                transactions.
               </AlertDescription>
             </Alert>
 
@@ -270,17 +131,17 @@ export function ExchangeRateModal({ isOpen, onClose }: ExchangeRateModalProps) {
             <div className="space-y-4">
               <div className="flex items-center gap-2 mb-4">
                 <TrendingUp className="h-5 w-5 text-blue-500" />
-                <h3 className="text-lg font-semibold">Current Exchange Rates</h3>
+                <h3 className="text-lg font-semibold">Global Exchange Rates</h3>
               </div>
 
-              {loading && exchangeRates.length === 0 ? (
+              {isLoading && rates.length === 0 ? (
                 <div className="text-center py-8">
                   <RefreshCw className="h-8 w-8 animate-spin mx-auto mb-2 text-gray-400" />
-                  <p className="text-gray-600">Loading exchange rates...</p>
+                  <p className="text-gray-600">Loading global exchange rates...</p>
                 </div>
               ) : (
                 <div className="grid gap-4">
-                  {exchangeRates.map((rate) => {
+                  {rates.map((rate) => {
                     const isProtected = isManuallyProtected(rate)
                     return (
                       <Card key={`${rate.base_currency}-${rate.target_currency}`} className="hover-lift">
@@ -312,7 +173,10 @@ export function ExchangeRateModal({ isOpen, onClose }: ExchangeRateModalProps) {
                                 <div className="flex items-center gap-2">
                                   <p className="text-sm text-gray-600">{getCurrencyName(rate.target_currency)}</p>
                                   {isProtected && (
-                                    <Badge variant="outline" className="text-xs flex items-center gap-1 bg-red-100 text-red-300">
+                                    <Badge
+                                      variant="outline"
+                                      className="text-xs flex items-center gap-1 bg-red-100 text-red-300"
+                                    >
                                       <Shield className="h-3 w-3" />
                                       Protected
                                     </Badge>
@@ -337,7 +201,7 @@ export function ExchangeRateModal({ isOpen, onClose }: ExchangeRateModalProps) {
 
                               {editingCurrency === rate.target_currency ? (
                                 <div className="flex gap-1">
-                                  <Button size="sm" onClick={handleSave} disabled={loading} className="h-8 w-8 p-0">
+                                  <Button size="sm" onClick={handleSave} disabled={isLoading} className="h-8 w-8 p-0">
                                     <Check className="h-4 w-4" />
                                   </Button>
                                   <Button
@@ -360,17 +224,6 @@ export function ExchangeRateModal({ isOpen, onClose }: ExchangeRateModalProps) {
                                     >
                                       <Edit className="h-4 w-4" />
                                     </Button>
-                                    {rate.is_manual && (
-                                      <Button
-                                        size="sm"
-                                        variant="ghost"
-                                        onClick={() => handleResetManual(rate.target_currency)}
-                                        className="h-8 w-8 p-0 text-orange-600 hover:text-orange-700"
-                                        title="Reset manual override"
-                                      >
-                                        <AlertTriangle className="h-4 w-4" />
-                                      </Button>
-                                    )}
                                   </div>
                                 )
                               )}
@@ -399,12 +252,12 @@ export function ExchangeRateModal({ isOpen, onClose }: ExchangeRateModalProps) {
 
             <Card>
               <CardHeader>
-                <CardTitle className="text-lg">Quick Converter</CardTitle>
-                <CardDescription>Convert between currencies using current rates</CardDescription>
+                <CardTitle className="text-lg">Global Currency Converter</CardTitle>
+                <CardDescription>Convert between currencies using current global rates</CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="grid grid-cols-3 gap-4 text-center">
-                  {exchangeRates.map((rate) => (
+                  {rates.map((rate) => (
                     <div key={rate.target_currency} className="p-3 bg-gray-50 rounded-lg">
                       <div className="text-lg mb-1">{getCurrencyFlag(rate.target_currency)}</div>
                       <div className="font-semibold">{rate.target_currency}</div>
@@ -478,10 +331,13 @@ export function ExchangeRateModal({ isOpen, onClose }: ExchangeRateModalProps) {
           </TabsContent>
         </Tabs>
 
-        {/* API Information */}
+        {/* Global Usage Information */}
         <div className="bg-blue-50 p-4 rounded-lg">
-          <h4 className="font-semibold text-blue-900 mb-2">Exchange Rate Protection System</h4>
+          <h4 className="font-semibold text-blue-900 mb-2">Global Exchange Rate System</h4>
           <ul className="text-sm text-blue-800 space-y-1">
+            <li>
+              • <strong>Application-Wide:</strong> These rates are used in all payments, invoices, and reports
+            </li>
             <li>
               • <strong>Automatic Updates:</strong> Rates are updated daily at midnight via API
             </li>
@@ -489,13 +345,10 @@ export function ExchangeRateModal({ isOpen, onClose }: ExchangeRateModalProps) {
               • <strong>Manual Override Protection:</strong> Manual rates are protected for 24 hours
             </li>
             <li>
-              • <strong>Smart Updates:</strong> Only non-manual rates are updated during API sync
+              • <strong>Real-Time Conversion:</strong> All currency conversions use these current rates
             </li>
             <li>
-              • <strong>Change Tracking:</strong> All rate changes are logged with timestamps
-            </li>
-            <li>
-              • <strong>Reset Option:</strong> Manual overrides can be reset to allow API updates
+              • <strong>Historical Tracking:</strong> All rate changes are logged with timestamps
             </li>
           </ul>
         </div>
