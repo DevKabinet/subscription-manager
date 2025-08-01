@@ -14,6 +14,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { ExchangeRateModal } from "@/components/exchange-rate-modal"
 import { useCompanySettingsStore } from "@/lib/company-settings"
 import { useExchangeRateStore } from "@/lib/exchange-rates"
+import { useAuthStore } from "@/lib/auth"
 
 export default function DashboardLayout({
   children,
@@ -27,12 +28,12 @@ export default function DashboardLayout({
 
   const { settings, updateSettings, isSetupComplete } = useCompanySettingsStore()
   const { fetchRates, lastFetched } = useExchangeRateStore()
+  const { user, isAuthenticated, logout } = useAuthStore()
 
   const [formSettings, setFormSettings] = useState(settings)
 
   useEffect(() => {
-    const isAuthenticated = localStorage.getItem("isAuthenticated")
-    if (!isAuthenticated) {
+    if (!isAuthenticated || !user) {
       router.push("/login")
       return
     }
@@ -43,21 +44,16 @@ export default function DashboardLayout({
     if (shouldFetch) {
       fetchRates()
     }
-  }, [router, fetchRates, lastFetched])
+  }, [router, fetchRates, lastFetched, isAuthenticated, user])
 
   useEffect(() => {
     setFormSettings(settings)
   }, [settings])
 
   const handleLogout = () => {
-    localStorage.removeItem("isAuthenticated")
-    localStorage.removeItem("userEmail")
-    localStorage.removeItem("isTester")
+    logout()
     router.push("/login")
   }
-
-  const userEmail = localStorage.getItem("userEmail") || "user@example.com"
-  const isTester = localStorage.getItem("isTester") === "true"
 
   const handleSettingsSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -76,6 +72,23 @@ export default function DashboardLayout({
     setFormSettings((prev) => ({ ...prev, [field]: value }))
   }
 
+  if (!isAuthenticated || !user) {
+    return null // Will redirect to login
+  }
+
+  const getRoleBadgeColor = (roleName: string) => {
+    switch (roleName) {
+      case "admin":
+        return "bg-red-500"
+      case "manager":
+        return "bg-blue-500"
+      case "user":
+        return "bg-green-500"
+      default:
+        return "bg-gray-500"
+    }
+  }
+
   return (
     <div className="min-h-screen bg-gray-50">
       <header className="bg-white shadow-sm border-b">
@@ -90,8 +103,10 @@ export default function DashboardLayout({
               )}
             </div>
             <div className="flex items-center gap-4">
-              {/* Only show badge for tester mode */}
-              {isTester && <Badge variant="secondary">Tester Mode</Badge>}
+              {/* Role Badge */}
+              <Badge className={`text-white text-xs ${getRoleBadgeColor(user.roleName)}`}>
+                {user.roleName.toUpperCase()}
+              </Badge>
 
               {/* Exchange Rate Button */}
               <Button
@@ -108,7 +123,10 @@ export default function DashboardLayout({
               <div className="flex items-center gap-2">
                 <div className="flex items-center gap-2 text-sm text-gray-600">
                   <User className="h-4 w-4" />
-                  <span>{userEmail}</span>
+                  <span>
+                    {user.firstName} {user.lastName}
+                  </span>
+                  <span className="text-gray-400">({user.email})</span>
                 </div>
                 <Button variant="ghost" size="sm" className="hover-lift" onClick={() => setIsSettingsModalOpen(true)}>
                   <Settings className="h-4 w-4" />

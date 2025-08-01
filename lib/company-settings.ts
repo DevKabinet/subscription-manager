@@ -3,64 +3,51 @@
 import { create } from "zustand"
 import { persist } from "zustand/middleware"
 
-interface CompanySettings {
+export interface CompanySettings {
   companyName: string
   address: string
   phone: string
   email: string
+  taxNumber: string
   website?: string
-  taxNumber?: string
+  logoUrl: string
   bankDetails?: string
   paymentTerms?: string
   footerText?: string
+}
+
+interface CompanySettingsState {
+  settings: CompanySettings
+  updateSettings: (newSettings: CompanySettings) => void
   isSetupComplete: boolean
 }
 
-interface CompanySettingsStore {
-  settings: CompanySettings
-  updateSettings: (settings: Partial<CompanySettings>) => void
-  resetSettings: () => void
-}
-
 const defaultSettings: CompanySettings = {
-  companyName: "Your Company Name",
-  address: "123 Business St\nCity, State 12345",
-  phone: "+1 (555) 123-4567",
-  email: "contact@yourcompany.com",
-  website: "",
+  companyName: "",
+  address: "",
+  phone: "",
+  email: "",
   taxNumber: "",
+  website: "",
+  logoUrl: "",
   bankDetails: "",
-  paymentTerms: "",
+  paymentTerms: "Payment is due within 30 days of invoice date.",
   footerText: "Thank you for your business!",
-  isSetupComplete: false,
 }
 
-export const useCompanySettingsStore = create<CompanySettingsStore>()(
+export const useCompanySettingsStore = create<CompanySettingsState>()(
   persist(
     (set, get) => ({
       settings: defaultSettings,
 
-      updateSettings: (newSettings) => {
-        const currentSettings = get().settings
-        const updatedSettings = { ...currentSettings, ...newSettings }
-
-        // Check if setup is complete
-        const isSetupComplete = !!(
-          updatedSettings.companyName &&
-          updatedSettings.address &&
-          updatedSettings.phone &&
-          updatedSettings.email
-        )
-
-        set({
-          settings: {
-            ...updatedSettings,
-            isSetupComplete,
-          },
-        })
+      updateSettings: (newSettings: CompanySettings) => {
+        set({ settings: newSettings })
       },
 
-      resetSettings: () => set({ settings: defaultSettings }),
+      get isSetupComplete() {
+        const { settings } = get()
+        return !!(settings.companyName && settings.address && settings.phone && settings.email)
+      },
     }),
     {
       name: "company-settings-storage",
