@@ -14,7 +14,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { FileText, Download, Plus, Paperclip, Filter, Edit } from "lucide-react"
+import { FileText, Download, Plus, Filter, Edit, DollarSign, Calculator } from "lucide-react"
 import jsPDF from "jspdf"
 
 interface Payment {
@@ -23,6 +23,9 @@ interface Payment {
   clientName: string
   subscriptionName: string
   amount: number
+  originalAmount: number // USD amount
+  currency: string
+  exchangeRate: number
   paymentDate: string
   dueDate: string
   status: "pending" | "paid" | "overdue" | "cancelled"
@@ -34,6 +37,14 @@ interface Payment {
   invoiceNumber?: string
 }
 
+interface ExchangeRate {
+  base_currency: string
+  target_currency: string
+  rate: number
+  last_updated: string
+  is_manual: boolean
+}
+
 interface InvoicePreview {
   invoiceNumber: string
   clientName: string
@@ -41,6 +52,9 @@ interface InvoicePreview {
   clientAddress: string
   subscriptionName: string
   amount: number
+  currency: string
+  originalAmount: number
+  exchangeRate: number
   issueDate: string
   dueDate?: string
   companyName: string
@@ -56,6 +70,9 @@ interface PaymentFormData {
   paymentDate: string
   dueDate: string
   amount: string
+  originalAmount: string
+  currency: string
+  exchangeRate: string
   paymentMethod: string
   paymentReference: string
   notes: string
@@ -64,9 +81,11 @@ interface PaymentFormData {
 export default function PaymentsPage() {
   const [payments, setPayments] = useState<Payment[]>([])
   const [filteredPayments, setFilteredPayments] = useState<Payment[]>([])
+  const [exchangeRates, setExchangeRates] = useState<ExchangeRate[]>([])
   const [filterMonth, setFilterMonth] = useState<string>(new Date().toISOString().slice(0, 7))
   const [filterStatus, setFilterStatus] = useState<string>("all")
   const [filterClient, setFilterClient] = useState<string>("all")
+  const [filterCurrency, setFilterCurrency] = useState<string>("all")
   const [isInvoiceModalOpen, setIsInvoiceModalOpen] = useState(false)
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false)
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
@@ -78,6 +97,9 @@ export default function PaymentsPage() {
     paymentDate: new Date().toISOString().split("T")[0],
     dueDate: "",
     amount: "",
+    originalAmount: "",
+    currency: "USD",
+    exchangeRate: "1.000000",
     paymentMethod: "",
     paymentReference: "",
     notes: "",
@@ -99,7 +121,24 @@ export default function PaymentsPage() {
       return
     }
 
-    // Load payments with recurring schedule
+    fetchExchangeRates()
+    loadPayments()
+  }, [router])
+
+  const fetchExchangeRates = async () => {
+    try {
+      const response = await fetch("/api/exchange-rates")
+      const result = await response.json()
+      if (result.success) {
+        setExchangeRates(result.data)
+      }
+    } catch (error) {
+      console.error("Failed to fetch exchange rates:", error)
+    }
+  }
+
+  const loadPayments = () => {
+    // Load payments with currency support
     const allPayments: Payment[] = [
       // Past payments
       {
@@ -108,6 +147,9 @@ export default function PaymentsPage() {
         clientName: "John Doe",
         subscriptionName: "Basic Plan",
         amount: 29.99,
+        originalAmount: 29.99,
+        currency: "USD",
+        exchangeRate: 1.0,
         paymentDate: "2024-01-01",
         dueDate: "2024-01-15",
         status: "paid",
@@ -119,7 +161,10 @@ export default function PaymentsPage() {
         clientSubscriptionId: 2,
         clientName: "Jane Smith",
         subscriptionName: "Premium Plan",
-        amount: 59.99,
+        amount: 1063.82, // 59.99 * 17.74 (SRD rate)
+        originalAmount: 59.99,
+        currency: "SRD",
+        exchangeRate: 17.74,
         paymentDate: "2024-01-05",
         dueDate: "2024-01-20",
         status: "paid",
@@ -135,7 +180,10 @@ export default function PaymentsPage() {
         clientSubscriptionId: 1,
         clientName: "John Doe",
         subscriptionName: "Basic Plan",
-        amount: 29.99,
+        amount: 25.49, // 29.99 * 0.85 (EUR rate)
+        originalAmount: 29.99,
+        currency: "EUR",
+        exchangeRate: 0.85,
         paymentDate: "2025-01-01",
         dueDate: "2025-01-15",
         status: "pending",
@@ -147,6 +195,9 @@ export default function PaymentsPage() {
         clientName: "Jane Smith",
         subscriptionName: "Premium Plan",
         amount: 59.99,
+        originalAmount: 59.99,
+        currency: "USD",
+        exchangeRate: 1.0,
         paymentDate: "2025-01-05",
         dueDate: "2025-01-20",
         status: "pending",
@@ -157,50 +208,65 @@ export default function PaymentsPage() {
         clientSubscriptionId: 3,
         clientName: "Alice Johnson",
         subscriptionName: "Basic Plan",
-        amount: 29.99,
+        amount: 1063.82, // 29.99 * 35.5 (SRD rate)
+        originalAmount: 29.99,
+        currency: "SRD",
+        exchangeRate: 35.5,
         paymentDate: "2025-01-10",
         dueDate: "2025-01-25",
         status: "overdue",
         invoiceNumber: "INV-2025-003",
       },
-      // Future payments (automatically generated)
-      {
-        id: 6,
-        clientSubscriptionId: 1,
-        clientName: "John Doe",
-        subscriptionName: "Basic Plan",
-        amount: 29.99,
-        paymentDate: "2025-02-01",
-        dueDate: "2025-02-15",
-        status: "pending",
-        invoiceNumber: "INV-2025-004",
-      },
-      {
-        id: 7,
-        clientSubscriptionId: 2,
-        clientName: "Jane Smith",
-        subscriptionName: "Premium Plan",
-        amount: 59.99,
-        paymentDate: "2025-02-05",
-        dueDate: "2025-02-20",
-        status: "pending",
-        invoiceNumber: "INV-2025-005",
-      },
-      {
-        id: 8,
-        clientSubscriptionId: 1,
-        clientName: "John Doe",
-        subscriptionName: "Basic Plan",
-        amount: 29.99,
-        paymentDate: "2025-03-01",
-        dueDate: "2025-03-15",
-        status: "pending",
-        invoiceNumber: "INV-2025-006",
-      },
     ]
 
     setPayments(allPayments)
-  }, [router])
+  }
+
+  // Calculate amount based on selected currency
+  const calculateAmount = (originalAmount: number, currency: string): { amount: number; rate: number } => {
+    if (currency === "USD") {
+      return { amount: originalAmount, rate: 1.0 }
+    }
+
+    const exchangeRate = exchangeRates.find((rate) => rate.target_currency === currency)
+    if (exchangeRate) {
+      return {
+        amount: originalAmount * exchangeRate.rate,
+        rate: exchangeRate.rate,
+      }
+    }
+
+    return { amount: originalAmount, rate: 1.0 }
+  }
+
+  // Handle currency change in form
+  const handleCurrencyChange = (currency: string) => {
+    const originalAmount = Number.parseFloat(paymentForm.originalAmount) || 0
+    const { amount, rate } = calculateAmount(originalAmount, currency)
+
+    setPaymentForm({
+      ...paymentForm,
+      currency,
+      amount: amount.toFixed(2),
+      exchangeRate: rate.toFixed(6),
+    })
+  }
+
+  // Handle subscription selection
+  const handleSubscriptionChange = (subscriptionId: string) => {
+    const subscription = clientSubscriptions.find((cs) => cs.id === Number.parseInt(subscriptionId))
+    if (subscription) {
+      const { amount, rate } = calculateAmount(subscription.price, paymentForm.currency)
+
+      setPaymentForm({
+        ...paymentForm,
+        clientSubscriptionId: subscriptionId,
+        originalAmount: subscription.price.toString(),
+        amount: amount.toFixed(2),
+        exchangeRate: rate.toFixed(6),
+      })
+    }
+  }
 
   // Filter payments based on selected criteria
   useEffect(() => {
@@ -221,8 +287,13 @@ export default function PaymentsPage() {
       filtered = filtered.filter((payment) => payment.clientName === filterClient)
     }
 
+    // Filter by currency
+    if (filterCurrency !== "all") {
+      filtered = filtered.filter((payment) => payment.currency === filterCurrency)
+    }
+
     setFilteredPayments(filtered)
-  }, [payments, filterMonth, filterStatus, filterClient])
+  }, [payments, filterMonth, filterStatus, filterClient, filterCurrency])
 
   const handlePaymentToggle = (paymentId: number, isPaid: boolean) => {
     setPayments(
@@ -248,6 +319,9 @@ export default function PaymentsPage() {
       clientAddress: "456 Client Ave, City, State 12345",
       subscriptionName: payment.subscriptionName,
       amount: payment.amount,
+      currency: payment.currency,
+      originalAmount: payment.originalAmount,
+      exchangeRate: payment.exchangeRate,
       issueDate: payment.paymentDate,
       dueDate: payment.dueDate,
       companyName: "Your Company Name",
@@ -269,6 +343,9 @@ export default function PaymentsPage() {
       paymentDate: payment.paymentDate,
       dueDate: payment.dueDate,
       amount: payment.amount.toString(),
+      originalAmount: payment.originalAmount.toString(),
+      currency: payment.currency,
+      exchangeRate: payment.exchangeRate.toString(),
       paymentMethod: payment.paymentMethod || "",
       paymentReference: payment.paymentReference || "",
       notes: payment.notes || "",
@@ -283,6 +360,9 @@ export default function PaymentsPage() {
       paymentDate: new Date().toISOString().split("T")[0],
       dueDate: "",
       amount: "",
+      originalAmount: "",
+      currency: "USD",
+      exchangeRate: "1.000000",
       paymentMethod: "",
       paymentReference: "",
       notes: "",
@@ -305,6 +385,9 @@ export default function PaymentsPage() {
       clientName: selectedSubscription.clientName,
       subscriptionName: selectedSubscription.subscriptionName,
       amount: Number.parseFloat(paymentForm.amount),
+      originalAmount: Number.parseFloat(paymentForm.originalAmount),
+      currency: paymentForm.currency,
+      exchangeRate: Number.parseFloat(paymentForm.exchangeRate),
       paymentDate: paymentForm.paymentDate,
       dueDate: paymentForm.dueDate,
       status: "pending",
@@ -330,6 +413,9 @@ export default function PaymentsPage() {
       paymentDate: paymentForm.paymentDate,
       dueDate: paymentForm.dueDate,
       amount: Number.parseFloat(paymentForm.amount),
+      originalAmount: Number.parseFloat(paymentForm.originalAmount),
+      currency: paymentForm.currency,
+      exchangeRate: Number.parseFloat(paymentForm.exchangeRate),
       paymentMethod: paymentForm.paymentMethod || undefined,
       paymentReference: paymentForm.paymentReference || undefined,
       notes: paymentForm.notes || undefined,
@@ -396,6 +482,14 @@ export default function PaymentsPage() {
     if (selectedInvoice.dueDate) {
       doc.text(`Due Date: ${new Date(selectedInvoice.dueDate).toLocaleDateString()}`, 120, 95)
     }
+    doc.text(`Currency: ${selectedInvoice.currency}`, 120, 100)
+    if (selectedInvoice.currency !== "USD") {
+      doc.text(
+        `Exchange Rate: 1 USD = ${selectedInvoice.exchangeRate.toFixed(6)} ${selectedInvoice.currency}`,
+        120,
+        105,
+      )
+    }
 
     // Table header
     doc.setFont("helvetica", "bold")
@@ -408,20 +502,25 @@ export default function PaymentsPage() {
     // Table content
     doc.setFont("helvetica", "normal")
     doc.text(selectedInvoice.subscriptionName, 20, 145)
-    doc.text(`$${selectedInvoice.amount.toFixed(2)}`, 150, 145)
+    doc.text(`${selectedInvoice.amount.toFixed(2)} ${selectedInvoice.currency}`, 150, 145)
+
+    // Show USD equivalent if different currency
+    if (selectedInvoice.currency !== "USD") {
+      doc.text(`(${selectedInvoice.originalAmount.toFixed(2)} USD)`, 150, 150)
+    }
 
     // Total
-    doc.line(20, 155, 190, 155)
+    doc.line(20, 160, 190, 160)
     doc.setFont("helvetica", "bold")
-    doc.text("Total:", 130, 165)
-    doc.text(`$${selectedInvoice.amount.toFixed(2)}`, 150, 165)
+    doc.text("Total:", 130, 170)
+    doc.text(`${selectedInvoice.amount.toFixed(2)} ${selectedInvoice.currency}`, 150, 170)
 
     // Payment instructions
     doc.setFont("helvetica", "bold")
     doc.text("Payment Instructions:", 20, 190)
 
     doc.setFont("helvetica", "normal")
-    const paymentText = "Please make payment by the due date. Payment can be made via cash, check, or bank transfer."
+    const paymentText = `Please make payment by the due date in ${selectedInvoice.currency}. Payment can be made via cash, check, or bank transfer.`
     const splitText = doc.splitTextToSize(paymentText, 170)
     doc.text(splitText, 20, 200)
 
@@ -448,6 +547,15 @@ export default function PaymentsPage() {
     }
   }
 
+  const getCurrencyFlag = (currency: string) => {
+    const flags: { [key: string]: string } = {
+      USD: "🇺🇸",
+      EUR: "🇪🇺",
+      SRD: "🇸🇷",
+    }
+    return flags[currency] || "💱"
+  }
+
   const totalAmount = filteredPayments.reduce((sum, payment) => sum + payment.amount, 0)
   const paidAmount = filteredPayments
     .filter((p) => p.status === "paid")
@@ -459,15 +567,16 @@ export default function PaymentsPage() {
     .filter((p) => p.status === "overdue")
     .reduce((sum, payment) => sum + payment.amount, 0)
 
-  // Get unique clients for filter
+  // Get unique clients and currencies for filters
   const uniqueClients = Array.from(new Set(payments.map((p) => p.clientName)))
+  const uniqueCurrencies = Array.from(new Set(payments.map((p) => p.currency)))
 
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Payment Tracking</h1>
-          <p className="text-gray-600">Monitor and manage recurring payments for your clients</p>
+          <p className="text-gray-600">Monitor and manage multi-currency payments for your clients</p>
         </div>
         <Button onClick={handleAddPayment}>
           <Plus className="h-4 w-4 mr-2" />
@@ -484,7 +593,7 @@ export default function PaymentsPage() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
             <div>
               <Label>Month</Label>
               <Select value={filterMonth} onValueChange={setFilterMonth}>
@@ -497,9 +606,6 @@ export default function PaymentsPage() {
                   <SelectItem value="2025-01">January 2025</SelectItem>
                   <SelectItem value="2025-02">February 2025</SelectItem>
                   <SelectItem value="2025-03">March 2025</SelectItem>
-                  <SelectItem value="2025-04">April 2025</SelectItem>
-                  <SelectItem value="2025-05">May 2025</SelectItem>
-                  <SelectItem value="2025-06">June 2025</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -534,6 +640,24 @@ export default function PaymentsPage() {
                 </SelectContent>
               </Select>
             </div>
+            <div>
+              <Label>Currency</Label>
+              <Select value={filterCurrency} onValueChange={setFilterCurrency}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Currencies</SelectItem>
+                  {uniqueCurrencies.map((currency) => (
+                    <SelectItem key={currency} value={currency}>
+                      <span className="flex items-center gap-2">
+                        {getCurrencyFlag(currency)} {currency}
+                      </span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
             <div className="flex items-end">
               <Button
                 variant="outline"
@@ -541,6 +665,7 @@ export default function PaymentsPage() {
                   setFilterMonth("all")
                   setFilterStatus("all")
                   setFilterClient("all")
+                  setFilterCurrency("all")
                 }}
               >
                 Clear Filters
@@ -557,7 +682,7 @@ export default function PaymentsPage() {
             <CardTitle className="text-sm font-medium">Total Amount</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">${totalAmount.toFixed(2)}</div>
+            <div className="text-2xl font-bold">Mixed Currencies</div>
             <p className="text-xs text-muted-foreground">{filteredPayments.length} payments</p>
           </CardContent>
         </Card>
@@ -567,7 +692,7 @@ export default function PaymentsPage() {
             <CardTitle className="text-sm font-medium">Paid</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-green-600">${paidAmount.toFixed(2)}</div>
+            <div className="text-2xl font-bold text-green-600">Mixed Currencies</div>
             <p className="text-xs text-muted-foreground">
               {filteredPayments.filter((p) => p.status === "paid").length} payments
             </p>
@@ -579,7 +704,7 @@ export default function PaymentsPage() {
             <CardTitle className="text-sm font-medium">Pending</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-orange-600">${pendingAmount.toFixed(2)}</div>
+            <div className="text-2xl font-bold text-orange-600">Mixed Currencies</div>
             <p className="text-xs text-muted-foreground">
               {filteredPayments.filter((p) => p.status === "pending").length} payments
             </p>
@@ -591,7 +716,7 @@ export default function PaymentsPage() {
             <CardTitle className="text-sm font-medium">Overdue</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-red-600">${overdueAmount.toFixed(2)}</div>
+            <div className="text-2xl font-bold text-red-600">Mixed Currencies</div>
             <p className="text-xs text-muted-foreground">
               {filteredPayments.filter((p) => p.status === "overdue").length} payments
             </p>
@@ -601,10 +726,9 @@ export default function PaymentsPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Payment Schedule</CardTitle>
+          <CardTitle>Multi-Currency Payment Schedule</CardTitle>
           <CardDescription>
-            Recurring payments with attachments and detailed tracking ({filteredPayments.length} of {payments.length}{" "}
-            payments shown)
+            Payments with automatic currency conversion ({filteredPayments.length} of {payments.length} payments shown)
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -614,12 +738,12 @@ export default function PaymentsPage() {
                 <TableHead>Client</TableHead>
                 <TableHead>Subscription</TableHead>
                 <TableHead>Amount</TableHead>
+                <TableHead>Currency</TableHead>
+                <TableHead>USD Equivalent</TableHead>
                 <TableHead>Payment Date</TableHead>
                 <TableHead>Due Date</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Method</TableHead>
-                <TableHead>Reference</TableHead>
-                <TableHead>Attachment</TableHead>
                 <TableHead>Invoice</TableHead>
                 <TableHead>Actions</TableHead>
               </TableRow>
@@ -632,26 +756,36 @@ export default function PaymentsPage() {
                     <div className="flex items-center gap-2">
                       <span>{payment.subscriptionName}</span>
                       <Badge variant="outline" className="text-xs">
-                        ${payment.amount.toFixed(2)}
+                        {payment.currency}
                       </Badge>
                     </div>
                   </TableCell>
-                  <TableCell>${payment.amount.toFixed(2)}</TableCell>
+                  <TableCell className="font-medium">
+                    <div className="flex items-center gap-1">
+                      {getCurrencyFlag(payment.currency)}
+                      {payment.amount.toFixed(2)}
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant="outline" className="flex items-center gap-1 w-fit">
+                      {getCurrencyFlag(payment.currency)}
+                      {payment.currency}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-sm text-gray-600">
+                    {payment.currency !== "USD" ? (
+                      <div>
+                        <div>🇺🇸 ${payment.originalAmount.toFixed(2)}</div>
+                        <div className="text-xs">Rate: {payment.exchangeRate.toFixed(4)}</div>
+                      </div>
+                    ) : (
+                      "🇺🇸 " + payment.amount.toFixed(2)
+                    )}
+                  </TableCell>
                   <TableCell>{new Date(payment.paymentDate).toLocaleDateString()}</TableCell>
                   <TableCell>{new Date(payment.dueDate).toLocaleDateString()}</TableCell>
                   <TableCell>{getStatusBadge(payment.status)}</TableCell>
                   <TableCell>{payment.paymentMethod || "-"}</TableCell>
-                  <TableCell>{payment.paymentReference || "-"}</TableCell>
-                  <TableCell>
-                    {payment.attachmentName ? (
-                      <Button variant="ghost" size="sm" onClick={() => window.open(payment.attachmentUrl, "_blank")}>
-                        <Paperclip className="h-4 w-4 mr-1" />
-                        {payment.attachmentName}
-                      </Button>
-                    ) : (
-                      "-"
-                    )}
-                  </TableCell>
                   <TableCell className="flex items-center justify-center">
                     {payment.invoiceNumber ? (
                       <Button variant="ghost" size="sm" onClick={() => handleInvoiceClick(payment)}>
@@ -682,50 +816,84 @@ export default function PaymentsPage() {
 
       {/* Add Payment Modal */}
       <Dialog open={isPaymentModalOpen} onOpenChange={setIsPaymentModalOpen}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-3xl">
           <DialogHeader>
-            <DialogTitle>Add New Payment</DialogTitle>
-            <DialogDescription>Create a new payment entry for a client subscription</DialogDescription>
+            <DialogTitle className="flex items-center gap-2">
+              <DollarSign className="h-5 w-5 text-green-500" />
+              Add New Multi-Currency Payment
+            </DialogTitle>
+            <DialogDescription>Create a new payment entry with automatic currency conversion</DialogDescription>
           </DialogHeader>
-          <form onSubmit={handlePaymentSubmit} className="space-y-4">
+          <form onSubmit={handlePaymentSubmit} className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Client Subscription</Label>
-                <Select
-                  value={paymentForm.clientSubscriptionId}
-                  onValueChange={(value) => {
-                    const subscription = clientSubscriptions.find((cs) => cs.id === Number.parseInt(value))
-                    setPaymentForm({
-                      ...paymentForm,
-                      clientSubscriptionId: value,
-                      amount: subscription?.price.toString() || "",
-                    })
-                  }}
-                  required
-                >
+                <Select value={paymentForm.clientSubscriptionId} onValueChange={handleSubscriptionChange} required>
                   <SelectTrigger>
                     <SelectValue placeholder="Select client subscription" />
                   </SelectTrigger>
                   <SelectContent>
                     {clientSubscriptions.map((cs) => (
                       <SelectItem key={cs.id} value={cs.id.toString()}>
-                        {cs.clientName} - {cs.subscriptionName}
+                        {cs.clientName} - {cs.subscriptionName} (${cs.price})
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label>Amount</Label>
-                <Input
-                  type="number"
-                  step="0.01"
-                  value={paymentForm.amount}
-                  onChange={(e) => setPaymentForm({ ...paymentForm, amount: e.target.value })}
-                  required
-                />
+                <Label>Payment Currency</Label>
+                <Select value={paymentForm.currency} onValueChange={handleCurrencyChange} required>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {exchangeRates.map((rate) => (
+                      <SelectItem key={rate.target_currency} value={rate.target_currency}>
+                        <span className="flex items-center gap-2">
+                          {getCurrencyFlag(rate.target_currency)} {rate.target_currency}
+                          {rate.target_currency !== "USD" && (
+                            <span className="text-xs text-gray-500">
+                              (1 USD = {rate.rate.toFixed(4)} {rate.target_currency})
+                            </span>
+                          )}
+                        </span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
+
+            {/* Currency Conversion Display */}
+            {paymentForm.originalAmount && paymentForm.currency && (
+              <Card className="bg-blue-50 border-blue-200">
+                <CardContent className="p-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Calculator className="h-4 w-4 text-blue-600" />
+                    <span className="font-medium text-blue-900">Currency Conversion</span>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                    <div>
+                      <span className="text-gray-600">Original (USD):</span>
+                      <div className="font-medium">🇺🇸 ${paymentForm.originalAmount}</div>
+                    </div>
+                    <div>
+                      <span className="text-gray-600">Exchange Rate:</span>
+                      <div className="font-medium">
+                        1 USD = {paymentForm.exchangeRate} {paymentForm.currency}
+                      </div>
+                    </div>
+                    <div>
+                      <span className="text-gray-600">Converted Amount:</span>
+                      <div className="font-medium text-lg text-blue-700">
+                        {getCurrencyFlag(paymentForm.currency)} {paymentForm.amount} {paymentForm.currency}
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
@@ -802,7 +970,8 @@ export default function PaymentsPage() {
             </div>
 
             <Button type="submit" className="w-full">
-              Add Payment
+              <Plus className="h-4 w-4 mr-2" />
+              Add Multi-Currency Payment
             </Button>
           </form>
         </DialogContent>
@@ -813,12 +982,12 @@ export default function PaymentsPage() {
         <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>Edit Payment</DialogTitle>
-            <DialogDescription>Update payment details and attachments</DialogDescription>
+            <DialogDescription>Update payment details and currency information</DialogDescription>
           </DialogHeader>
           <form onSubmit={handlePaymentUpdate} className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label>Amount</Label>
+                <Label>Amount ({paymentForm.currency})</Label>
                 <Input
                   type="number"
                   step="0.01"
@@ -901,7 +1070,7 @@ export default function PaymentsPage() {
                 Download PDF
               </Button>
             </DialogTitle>
-            <DialogDescription>Preview and download invoice</DialogDescription>
+            <DialogDescription>Preview and download multi-currency invoice</DialogDescription>
           </DialogHeader>
 
           {selectedInvoice && (
@@ -944,6 +1113,16 @@ export default function PaymentsPage() {
                         {new Date(selectedInvoice.dueDate).toLocaleDateString()}
                       </p>
                     )}
+                    <p>
+                      <span className="font-medium">Currency:</span> {getCurrencyFlag(selectedInvoice.currency)}{" "}
+                      {selectedInvoice.currency}
+                    </p>
+                    {selectedInvoice.currency !== "USD" && (
+                      <p>
+                        <span className="font-medium">Exchange Rate:</span> 1 USD ={" "}
+                        {selectedInvoice.exchangeRate.toFixed(6)} {selectedInvoice.currency}
+                      </p>
+                    )}
                   </div>
                 </div>
               </div>
@@ -959,8 +1138,20 @@ export default function PaymentsPage() {
                   </thead>
                   <tbody>
                     <tr className="border-b border-gray-200">
-                      <td className="py-4 text-gray-600">{selectedInvoice.subscriptionName}</td>
-                      <td className="py-4 text-right text-gray-600">${selectedInvoice.amount.toFixed(2)}</td>
+                      <td className="py-4 text-gray-600">
+                        <div>{selectedInvoice.subscriptionName}</div>
+                        {selectedInvoice.currency !== "USD" && (
+                          <div className="text-sm text-gray-500">
+                            Original: ${selectedInvoice.originalAmount.toFixed(2)} USD
+                          </div>
+                        )}
+                      </td>
+                      <td className="py-4 text-right text-gray-600">
+                        <div className="flex items-center justify-end gap-1">
+                          {getCurrencyFlag(selectedInvoice.currency)}
+                          {selectedInvoice.amount.toFixed(2)} {selectedInvoice.currency}
+                        </div>
+                      </td>
                     </tr>
                   </tbody>
                 </table>
@@ -971,7 +1162,10 @@ export default function PaymentsPage() {
                 <div className="w-64">
                   <div className="flex justify-between py-2 border-t-2 border-gray-300">
                     <span className="font-semibold text-gray-900">Total:</span>
-                    <span className="font-bold text-xl text-gray-900">${selectedInvoice.amount.toFixed(2)}</span>
+                    <span className="font-bold text-xl text-gray-900 flex items-center gap-1">
+                      {getCurrencyFlag(selectedInvoice.currency)}
+                      {selectedInvoice.amount.toFixed(2)} {selectedInvoice.currency}
+                    </span>
                   </div>
                 </div>
               </div>
@@ -980,9 +1174,17 @@ export default function PaymentsPage() {
               <div className="border-t border-gray-200 pt-6">
                 <h3 className="text-lg font-semibold text-gray-900 mb-3">Payment Instructions</h3>
                 <p className="text-gray-600">
-                  Please make payment by the due date. Payment can be made via cash, check, or bank transfer. For any
-                  questions regarding this invoice, please contact us at {selectedInvoice.companyEmail}.
+                  Please make payment by the due date in {selectedInvoice.currency}. Payment can be made via cash,
+                  check, or bank transfer. For any questions regarding this invoice, please contact us at{" "}
+                  {selectedInvoice.companyEmail}.
                 </p>
+                {selectedInvoice.currency !== "USD" && (
+                  <p className="text-gray-600 mt-2">
+                    <strong>Note:</strong> This invoice is billed in {selectedInvoice.currency} based on the exchange
+                    rate of 1 USD = {selectedInvoice.exchangeRate.toFixed(6)} {selectedInvoice.currency} at the time of
+                    invoice generation.
+                  </p>
+                )}
               </div>
 
               {/* Footer */}
