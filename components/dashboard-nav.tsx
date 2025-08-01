@@ -1,111 +1,160 @@
 "use client"
 
+import type React from "react"
+import { useState } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
-import { Home, Users, DollarSign, Receipt, CreditCard, Settings } from "lucide-react"
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
+import {
+  LayoutDashboard,
+  Users,
+  FileText,
+  DollarSign,
+  UserCheck,
+  Building2,
+  Calendar,
+  ChevronDown,
+  ChevronRight,
+} from "lucide-react"
+import { useAuthStore } from "@/lib/auth"
 
-interface DashboardNavProps {
-  isCollapsed: boolean
-  userRole: string
+interface NavItem {
+  title: string
+  href: string
+  icon: React.ComponentType<{ className?: string }>
+  badge?: string
+  requiredRole?: string[]
+  children?: NavItem[]
 }
 
-export function DashboardNav({ isCollapsed, userRole }: DashboardNavProps) {
-  const pathname = usePathname()
+const navItems: NavItem[] = [
+  {
+    title: "Dashboard",
+    href: "/dashboard",
+    icon: LayoutDashboard,
+  },
+  {
+    title: "Clients",
+    href: "/dashboard/clients",
+    icon: Building2,
+  },
+  {
+    title: "Subscriptions",
+    href: "/dashboard/subscriptions",
+    icon: Calendar,
+  },
+  {
+    title: "Client Subscriptions",
+    href: "/dashboard/client-subscriptions",
+    icon: UserCheck,
+  },
+  {
+    title: "Invoices",
+    href: "/dashboard/invoices",
+    icon: FileText,
+  },
+  {
+    title: "Payments",
+    href: "/dashboard/payments",
+    icon: DollarSign,
+  },
+  {
+    title: "User Management",
+    href: "/dashboard/users",
+    icon: Users,
+    requiredRole: ["admin"],
+    badge: "Admin Only",
+  },
+]
 
-  const navItems = [
-    {
-      title: "Dashboard",
-      href: "/dashboard",
-      icon: Home,
-      roles: ["admin", "user"],
-    },
-    {
-      title: "Clients",
-      href: "/dashboard/clients",
-      icon: Users,
-      roles: ["admin", "user"],
-    },
-    {
-      title: "Subscriptions",
-      href: "/dashboard/subscriptions",
-      icon: Receipt,
-      roles: ["admin", "user"],
-    },
-    {
-      title: "Payments",
-      href: "/dashboard/payments",
-      icon: CreditCard,
-      roles: ["admin", "user"],
-    },
-    {
-      title: "Invoices",
-      href: "/dashboard/invoices",
-      icon: DollarSign,
-      roles: ["admin", "user"],
-    },
-    {
-      title: "Users",
-      href: "/dashboard/users",
-      icon: Users,
-      roles: ["admin"], // Only accessible to admin
-    },
-    {
-      title: "Settings",
-      href: "/dashboard/settings",
-      icon: Settings,
-      roles: ["admin"], // Only accessible to admin
-    },
-  ]
+export function DashboardNav() {
+  const pathname = usePathname()
+  const { user, hasPermission } = useAuthStore()
+  const [expandedItems, setExpandedItems] = useState<string[]>([])
+
+  const toggleExpanded = (title: string) => {
+    setExpandedItems((prev) => (prev.includes(title) ? prev.filter((item) => item !== title) : [...prev, title]))
+  }
+
+  const isActive = (href: string) => {
+    if (href === "/dashboard") {
+      return pathname === href
+    }
+    return pathname.startsWith(href)
+  }
+
+  const canAccessItem = (item: NavItem) => {
+    if (!item.requiredRole) return true
+    if (!user) return false
+
+    return item.requiredRole.includes(user.roleName)
+  }
+
+  const renderNavItem = (item: NavItem, level = 0) => {
+    if (!canAccessItem(item)) return null
+
+    const hasChildren = item.children && item.children.length > 0
+    const isExpanded = expandedItems.includes(item.title)
+    const active = isActive(item.href)
+
+    return (
+      <div key={item.title}>
+        <div className="relative">
+          {hasChildren ? (
+            <Button
+              variant="ghost"
+              className={cn(
+                "w-full justify-start gap-2 h-9 px-3",
+                level > 0 && "ml-4 w-[calc(100%-1rem)]",
+                active && "bg-accent text-accent-foreground",
+              )}
+              onClick={() => toggleExpanded(item.title)}
+            >
+              <item.icon className="h-4 w-4" />
+              <span className="flex-1 text-left">{item.title}</span>
+              {item.badge && (
+                <Badge variant="secondary" className="text-xs">
+                  {item.badge}
+                </Badge>
+              )}
+              {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+            </Button>
+          ) : (
+            <Link href={item.href}>
+              <Button
+                variant="ghost"
+                className={cn(
+                  "w-full justify-start gap-2 h-9 px-3",
+                  level > 0 && "ml-4 w-[calc(100%-1rem)]",
+                  active && "bg-accent text-accent-foreground",
+                )}
+              >
+                <item.icon className="h-4 w-4" />
+                <span className="flex-1 text-left">{item.title}</span>
+                {item.badge && (
+                  <Badge variant="secondary" className="text-xs">
+                    {item.badge}
+                  </Badge>
+                )}
+              </Button>
+            </Link>
+          )}
+        </div>
+
+        {hasChildren && isExpanded && (
+          <div className="mt-1 space-y-1">{item.children?.map((child) => renderNavItem(child, level + 1))}</div>
+        )}
+      </div>
+    )
+  }
 
   return (
-    <TooltipProvider>
-      <nav className="grid gap-1 px-2 group-[[data-collapsed=true]]:justify-center group-[[data-collapsed=true]]:px-2">
-        {navItems.map((item, index) => {
-          if (!item.roles.includes(userRole)) {
-            return null
-          }
-
-          return isCollapsed ? (
-            <Tooltip key={index} delayDuration={0}>
-              <TooltipTrigger asChild>
-                <Link
-                  href={item.href}
-                  className={cn(
-                    "flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:text-foreground",
-                    pathname === item.href && "bg-accent text-accent-foreground",
-                  )}
-                >
-                  <item.icon className="h-5 w-5" />
-                  <span className="sr-only">{item.title}</span>
-                </Link>
-              </TooltipTrigger>
-              <TooltipContent side="right" className="flex items-center gap-4">
-                {item.title}
-                {item.label && <span className="ml-auto text-muted-foreground">{item.label}</span>}
-              </TooltipContent>
-            </Tooltip>
-          ) : (
-            <Link
-              key={index}
-              href={item.href}
-              className={cn(
-                "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground",
-                pathname === item.href && "bg-accent text-accent-foreground",
-              )}
-            >
-              <item.icon className="h-5 w-5" />
-              {item.title}
-              {item.label && (
-                <span className={cn("ml-auto", pathname === item.href && "text-background dark:text-white")}>
-                  {item.label}
-                </span>
-              )}
-            </Link>
-          )
-        })}
-      </nav>
-    </TooltipProvider>
+    <nav className="bg-white border-b">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="flex space-x-1 overflow-x-auto py-2">{navItems.map((item) => renderNavItem(item))}</div>
+      </div>
+    </nav>
   )
 }

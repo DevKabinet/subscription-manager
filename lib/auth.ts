@@ -1,106 +1,167 @@
-import { SignJWT, jwtVerify } from "jose"
-import { cookies } from "next/headers"
-import { redirect } from "next/navigation"
-import { getUserById } from "./user-management" // Assuming this function exists
+"use client"
 
-const secretKey = process.env.SESSION_SECRET
-const encodedKey = new TextEncoder().encode(secretKey)
+import { create } from "zustand"
+import { persist } from "zustand/middleware"
 
-export async function encrypt(payload: any) {
-  return new SignJWT(payload)
-    .setProtectedHeader({ alg: "HS256" })
-    .setIssuedAt()
-    .setExpirationTime("7d") // Session expires in 7 days
-    .sign(encodedKey)
+export interface User {
+  id: number
+  email: string
+  firstName: string
+  lastName: string
+  roleId: number
+  roleName: string
+  rolePermissions: Record<string, any>
+  isActive: boolean
+  lastLogin?: string
+  createdAt: string
 }
 
-export async function decrypt(session: string | undefined = "") {
-  try {
-    const { payload } = await jwtVerify(session, encodedKey, {
-      algorithms: ["HS256"],
-    })
-    return payload
-  } catch (error) {
-    console.error("Failed to decrypt session:", error)
-    return null
-  }
+interface AuthState {
+  user: User | null
+  isAuthenticated: boolean
+  login: (email: string, password: string) => Promise<{ success: boolean; message: string }>
+  logout: () => void
+  updateLastLogin: () => void
+  hasPermission: (resource: string, action: string) => boolean
+  isAdmin: () => boolean
+  isManager: () => boolean
 }
 
-export async function createSession(userId: string) {
-  const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) // 7 days
-  const session = await encrypt({ userId, expiresAt })
-
-  cookies().set("session", session, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    expires: expiresAt,
-    sameSite: "lax",
-    path: "/",
-  })
+// Mock user database - in production, this would be API calls
+const mockUsers: Record<string, User & { password: string }> = {
+  "admin@company.com": {
+    id: 1,
+    email: "admin@company.com",
+    password: "admin123",
+    firstName: "System",
+    lastName: "Administrator",
+    roleId: 1,
+    roleName: "admin",
+    rolePermissions: {
+      users: { create: true, read: true, update: true, delete: true },
+      settings: { manage: true },
+      invoices: { create: true, read: true, update: true, delete: true },
+      payments: { create: true, read: true, update: true, delete: true },
+    },
+    isActive: true,
+    createdAt: "2024-01-01T00:00:00Z",
+  },
+  "manager@company.com": {
+    id: 2,
+    email: "manager@company.com",
+    password: "manager123",
+    firstName: "John",
+    lastName: "Manager",
+    roleId: 2,
+    roleName: "manager",
+    rolePermissions: {
+      users: { create: false, read: true, update: false, delete: false },
+      settings: { manage: false },
+      invoices: { create: true, read: true, update: true, delete: false },
+      payments: { create: true, read: true, update: true, delete: false },
+    },
+    isActive: true,
+    createdAt: "2024-01-01T00:00:00Z",
+  },
+  "user@company.com": {
+    id: 3,
+    email: "user@company.com",
+    password: "user123",
+    firstName: "Jane",
+    lastName: "User",
+    roleId: 3,
+    roleName: "user",
+    rolePermissions: {
+      users: { create: false, read: false, update: false, delete: false },
+      settings: { manage: false },
+      invoices: { create: true, read: true, update: false, delete: false },
+      payments: { create: true, read: true, update: false, delete: false },
+    },
+    isActive: true,
+    createdAt: "2024-01-01T00:00:00Z",
+  },
 }
 
-export async function updateSession() {
-  const session = cookies().get("session")?.value
-  const payload = await decrypt(session)
+export const useAuthStore = create<AuthState>()(
+  persist(
+    (set, get) => ({
+      user: null,
+      isAuthenticated: false,
 
-  if (!session || !payload) {
-    return null
-  }
+      login: async (email: string, password: string) => {
+        // Simulate API delay
+        await new Promise((resolve) => setTimeout(resolve, 1000))
 
-  const currentTime = Date.now()
-  const sessionExpiresAt = payload.expiresAt ? new Date(payload.expiresAt as number).getTime() : 0
+        const mockUser = mockUsers[email.toLowerCase()]
 
-  // Refresh the session if it's about to expire (e.g., within 24 hours)
-  if (sessionExpiresAt - currentTime < 24 * 60 * 60 * 1000) {
-    const newExpiresAt = new Date(currentTime + 7 * 24 * 60 * 60 * 1000)
-    const newSession = await encrypt({ userId: payload.userId, expiresAt: newExpiresAt })
+        if (!mockUser || mockUser.password !== password) {
+          return { success: false, message: "Invalid email or password" }
+        }
 
-    cookies().set("session", newSession, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      expires: newExpiresAt,
-      sameSite: "lax",
-      path: "/",
-    })
-  }
+        if (!mockUser.isActive) {
+          return { success: false, message: "Account is deactivated" }
+        }
 
-  return payload
-}
+        const { password: _, ...user } = mockUser
+        user.lastLogin = new Date().toISOString()
 
-export async function deleteSession() {
-  cookies().delete("session")
-}
+        set({
+          user,
+          isAuthenticated: true,
+        })
 
-export async function getSession() {
-  const session = cookies().get("session")?.value
-  if (!session) return null
-  return await decrypt(session)
-}
+        // Store in localStorage for compatibility
+        localStorage.setItem("isAuthenticated", "true")
+        localStorage.setItem("userEmail", user.email)
+        localStorage.setItem("userRole", user.roleName)
 
-export async function getAuthenticatedUser() {
-  const session = await getSession()
-  if (!session?.userId) {
-    return null
-  }
-  const user = await getUserById(session.userId)
-  return user
-}
+        return { success: true, message: "Login successful" }
+      },
 
-export async function requireAuth(allowedRoles?: string[]) {
-  const user = await getAuthenticatedUser()
+      logout: () => {
+        set({ user: null, isAuthenticated: false })
+        localStorage.removeItem("isAuthenticated")
+        localStorage.removeItem("userEmail")
+        localStorage.removeItem("userRole")
+        localStorage.removeItem("isTester")
+      },
 
-  if (!user) {
-    redirect("/login")
-  }
+      updateLastLogin: () => {
+        const { user } = get()
+        if (user) {
+          set({
+            user: {
+              ...user,
+              lastLogin: new Date().toISOString(),
+            },
+          })
+        }
+      },
 
-  if (allowedRoles && !allowedRoles.includes(user.role)) {
-    // Using Next.js 15.1 experimental forbidden() API for 403
-    // You need to enable `authInterrupts: true` in next.config.ts
-    // and create an app/forbidden.tsx file.
-    // For now, we'll redirect to login or a generic error page.
-    console.warn(`User ${user.email} (role: ${user.role}) attempted to access restricted resource.`)
-    redirect("/login?error=unauthorized") // Or redirect to a custom 403 page
-  }
+      hasPermission: (resource: string, action: string) => {
+        const { user } = get()
+        if (!user) return false
 
-  return user
-}
+        const resourcePermissions = user.rolePermissions[resource]
+        return resourcePermissions && resourcePermissions[action] === true
+      },
+
+      isAdmin: () => {
+        const { user } = get()
+        return user?.roleName === "admin"
+      },
+
+      isManager: () => {
+        const { user } = get()
+        return user?.roleName === "manager" || user?.roleName === "admin"
+      },
+    }),
+    {
+      name: "auth-storage",
+      partialize: (state) => ({
+        user: state.user,
+        isAuthenticated: state.isAuthenticated,
+      }),
+    },
+  ),
+)

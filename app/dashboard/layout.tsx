@@ -1,20 +1,12 @@
 "use client"
 
 import type React from "react"
-
-import type { ReactNode } from "react"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { cookies } from "next/headers"
-import { redirect } from "next/navigation"
-import { getAuthenticatedUser } from "@/lib/auth"
-import { DashboardNav } from "@/components/dashboard-nav"
-import { Sidebar, SidebarContent, SidebarProvider } from "@/components/ui/sidebar"
-import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 import { Button } from "@/components/ui/button"
-import { PanelLeft } from "lucide-react"
-import { UserNav } from "@/components/user-nav"
-import { Save } from "lucide-react"
+import { Badge } from "@/components/ui/badge"
+import { Settings, User, Save, DollarSign } from "lucide-react"
+import { DashboardNav } from "@/components/dashboard-nav"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
@@ -23,10 +15,12 @@ import { ExchangeRateModal } from "@/components/exchange-rate-modal"
 import { useCompanySettingsStore } from "@/lib/company-settings"
 import { useExchangeRateStore } from "@/lib/exchange-rates"
 import { useAuthStore } from "@/lib/auth"
-import Link from "next/link"
 
-export default async function DashboardLayout({ children }: { children: ReactNode }) {
-  const user = await getAuthenticatedUser()
+export default function DashboardLayout({
+  children,
+}: {
+  children: React.ReactNode
+}) {
   const router = useRouter()
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false)
   const [isExchangeRateModalOpen, setIsExchangeRateModalOpen] = useState(false)
@@ -34,12 +28,27 @@ export default async function DashboardLayout({ children }: { children: ReactNod
 
   const { settings, updateSettings, isSetupComplete } = useCompanySettingsStore()
   const { fetchRates, lastFetched } = useExchangeRateStore()
-  const { logout } = useAuthStore()
+  const { user, isAuthenticated, logout } = useAuthStore()
 
   const [formSettings, setFormSettings] = useState(settings)
 
-  const cookieStore = cookies()
-  const defaultOpen = cookieStore.get("sidebar:state")?.value === "true"
+  useEffect(() => {
+    if (!isAuthenticated || !user) {
+      router.push("/login")
+      return
+    }
+
+    // Initialize global exchange rates on app load
+    const shouldFetch = !lastFetched || new Date().getTime() - new Date(lastFetched).getTime() > 24 * 60 * 60 * 1000 // 24 hours
+
+    if (shouldFetch) {
+      fetchRates()
+    }
+  }, [router, fetchRates, lastFetched, isAuthenticated, user])
+
+  useEffect(() => {
+    setFormSettings(settings)
+  }, [settings])
 
   const handleLogout = () => {
     logout()
@@ -63,8 +72,8 @@ export default async function DashboardLayout({ children }: { children: ReactNod
     setFormSettings((prev) => ({ ...prev, [field]: value }))
   }
 
-  if (!user) {
-    redirect("/login")
+  if (!isAuthenticated || !user) {
+    return null // Will redirect to login
   }
 
   const getRoleBadgeColor = (roleName: string) => {
@@ -81,61 +90,72 @@ export default async function DashboardLayout({ children }: { children: ReactNod
   }
 
   return (
-    <SidebarProvider defaultOpen={defaultOpen}>
-      <div className="flex min-h-screen w-full flex-col bg-muted/40">
-        <Sidebar className="hidden md:flex">
-          <SidebarContent>
-            <div className="flex h-14 items-center border-b px-4 lg:h-[60px] lg:px-6">
-              <Link href="/" className="flex items-center gap-2 font-semibold">
-                <span className="">Subscription Manager</span>
-              </Link>
+    <div className="min-h-screen bg-gray-50">
+      <header className="bg-white shadow-sm border-b">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between items-center py-4">
+            <div className="flex items-center gap-4">
+              <h1 className="text-2xl font-bold text-gray-900">Subscription Manager</h1>
+              {!isSetupComplete && (
+                <Badge variant="destructive" className="text-xs">
+                  Setup Required
+                </Badge>
+              )}
             </div>
-            <div className="flex-1">
-              <DashboardNav isCollapsed={false} userRole={user.role} />
-            </div>
-            <div className="mt-auto p-4">
-              <UserNav user={user} />
-            </div>
-          </SidebarContent>
-        </Sidebar>
-        <div className="flex flex-col sm:gap-4 sm:py-4 sm:pl-14">
-          <header className="sticky top-0 z-30 flex h-14 items-center gap-4 border-b bg-background px-4 sm:static sm:h-auto sm:border-0 sm:bg-transparent sm:px-6 lg:h-[60px]">
-            <Sheet>
-              <SheetTrigger asChild>
-                <Button size="icon" variant="outline" className="sm:hidden bg-transparent">
-                  <PanelLeft className="h-5 w-5" />
-                  <span className="sr-only">Toggle Menu</span>
-                </Button>
-              </SheetTrigger>
-              <SheetContent side="left" className="sm:max-w-xs">
-                <nav className="grid gap-6 text-lg font-medium">
-                  <Link href="#" className="flex items-center gap-2 text-lg font-semibold">
-                    <span>Subscription Manager</span>
-                  </Link>
-                  <DashboardNav isCollapsed={false} userRole={user.role} />
-                </nav>
-              </SheetContent>
-            </Sheet>
-            <div className="relative ml-auto flex-1 md:grow-0">{/* Search or other header content can go here */}</div>
-            <div className="hidden md:block">
-              <UserNav user={user} />
-            </div>
-          </header>
-          <main className="grid flex-1 items-start gap-4 p-4 sm:px-6 sm:py-0 md:gap-8 lg:grid-cols-3 xl:grid-cols-3">
-            {!isSetupComplete && (
-              <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-                <div className="flex items-center gap-2">
-                  <span className="text-yellow-600 font-medium">⚠️ Setup Required</span>
+            <div className="flex items-center gap-4">
+              {/* Role Badge */}
+              <Badge className={`text-white text-xs ${getRoleBadgeColor(user.roleName)}`}>
+                {user.roleName.toUpperCase()}
+              </Badge>
+
+              {/* Exchange Rate Button */}
+              <Button
+                variant="ghost"
+                size="sm"
+                className="hover-lift flex items-center gap-2"
+                onClick={() => setIsExchangeRateModalOpen(true)}
+              >
+                <DollarSign className="h-4 w-4 text-green-500" />
+                <span className="hidden sm:inline">Global Rates</span>
+              </Button>
+
+              {/* User Info and Settings */}
+              <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 text-sm text-gray-600">
+                  <User className="h-4 w-4" />
+                  <span>
+                    {user.firstName} {user.lastName}
+                  </span>
+                  <span className="text-gray-400">({user.email})</span>
                 </div>
-                <p className="text-sm text-yellow-700 mt-1">
-                  Please complete your company settings to generate professional invoices.
-                </p>
+                <Button variant="ghost" size="sm" className="hover-lift" onClick={() => setIsSettingsModalOpen(true)}>
+                  <Settings className="h-4 w-4" />
+                </Button>
               </div>
-            )}
-            {children}
-          </main>
+
+              <Button variant="outline" onClick={handleLogout} className="hover-lift bg-transparent">
+                Logout
+              </Button>
+            </div>
+          </div>
         </div>
-      </div>
+      </header>
+
+      <DashboardNav />
+
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {!isSetupComplete && (
+          <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+            <div className="flex items-center gap-2">
+              <span className="text-yellow-600 font-medium">⚠️ Setup Required</span>
+            </div>
+            <p className="text-sm text-yellow-700 mt-1">
+              Please complete your company settings to generate professional invoices.
+            </p>
+          </div>
+        )}
+        {children}
+      </main>
 
       {/* Company Settings Modal */}
       <Dialog open={isSettingsModalOpen} onOpenChange={setIsSettingsModalOpen}>
@@ -270,6 +290,6 @@ export default async function DashboardLayout({ children }: { children: ReactNod
 
       {/* Exchange Rate Modal */}
       <ExchangeRateModal isOpen={isExchangeRateModalOpen} onClose={() => setIsExchangeRateModalOpen(false)} />
-    </SidebarProvider>
+    </div>
   )
 }

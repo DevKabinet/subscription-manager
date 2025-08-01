@@ -1,288 +1,200 @@
 "use client"
-
-import { useEffect, useState } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { DollarSign } from "lucide-react"
+import { Users, FileText, DollarSign, TrendingUp, Calendar, Building2, UserCheck, RefreshCw } from "lucide-react"
 import { useExchangeRateStore } from "@/lib/exchange-rates"
-import { ExchangeRateModal } from "@/components/exchange-rate-modal"
+import { useAuthStore } from "@/lib/auth"
 
 export default function DashboardPage() {
-  const { rates, fetchRates, isLoading, error, getCurrencyFlag } = useExchangeRateStore()
-  const [isModalOpen, setIsModalOpen] = useState(false)
+  const { rates, fetchRates, isLoading } = useExchangeRateStore()
+  const { user } = useAuthStore()
 
-  useEffect(() => {
-    fetchRates()
-  }, [fetchRates])
+  // Mock data - in a real app, this would come from your API
+  const stats = [
+    {
+      title: "Total Clients",
+      value: "1,234",
+      change: "+12%",
+      changeType: "positive" as const,
+      icon: Building2,
+    },
+    {
+      title: "Active Subscriptions",
+      value: "856",
+      change: "+8%",
+      changeType: "positive" as const,
+      icon: UserCheck,
+    },
+    {
+      title: "Monthly Revenue",
+      value: "$45,231",
+      change: "+23%",
+      changeType: "positive" as const,
+      icon: DollarSign,
+    },
+    {
+      title: "Pending Invoices",
+      value: "23",
+      change: "-5%",
+      changeType: "negative" as const,
+      icon: FileText,
+    },
+  ]
 
-  const handleOpenModal = () => setIsModalOpen(true)
-  const handleCloseModal = () => setIsModalOpen(false)
+  const recentActivity = [
+    {
+      id: 1,
+      type: "payment",
+      description: "Payment received from Acme Corp",
+      amount: "$2,500",
+      time: "2 hours ago",
+    },
+    {
+      id: 2,
+      type: "subscription",
+      description: "New subscription created for TechStart Inc",
+      amount: "$99/month",
+      time: "4 hours ago",
+    },
+    {
+      id: 3,
+      type: "invoice",
+      description: "Invoice #INV-001 sent to Global Solutions",
+      amount: "$1,200",
+      time: "6 hours ago",
+    },
+    {
+      id: 4,
+      type: "client",
+      description: "New client registered: Innovation Labs",
+      amount: "",
+      time: "1 day ago",
+    },
+  ]
 
-  // Defensive check for rates before mapping
-  const displayRates = Array.isArray(rates)
-    ? rates.filter((rate) => rate.base_currency === "USD" && rate.target_currency !== "USD")
-    : []
+  const getActivityIcon = (type: string) => {
+    switch (type) {
+      case "payment":
+        return <DollarSign className="h-4 w-4 text-green-500" />
+      case "subscription":
+        return <Calendar className="h-4 w-4 text-blue-500" />
+      case "invoice":
+        return <FileText className="h-4 w-4 text-orange-500" />
+      case "client":
+        return <Users className="h-4 w-4 text-purple-500" />
+      default:
+        return <TrendingUp className="h-4 w-4 text-gray-500" />
+    }
+  }
+
+  const getCurrencyFlag = (currency: string) => {
+    const flags: Record<string, string> = {
+      USD: "🇺🇸",
+      EUR: "🇪🇺",
+      GBP: "🇬🇧",
+      JPY: "🇯🇵",
+      CAD: "🇨🇦",
+      AUD: "🇦🇺",
+      CHF: "🇨🇭",
+      CNY: "🇨🇳",
+    }
+    return flags[currency] || "💱"
+  }
+
+  // Ensure rates is an array before rendering
+  const safeRates = Array.isArray(rates) ? rates : []
 
   return (
-    <div className="flex-1 space-y-4 p-8 pt-6">
-      <div className="flex items-center justify-between space-y-2">
-        <h2 className="text-3xl font-bold tracking-tight">Dashboard</h2>
-        <div className="flex items-center space-x-2">
-          <Button onClick={handleOpenModal}>
-            <DollarSign className="mr-2 h-4 w-4" /> Manage Exchange Rates
-          </Button>
-        </div>
+    <div className="space-y-8">
+      {/* Welcome Section */}
+      <div>
+        <h1 className="text-3xl font-bold text-gray-900">Welcome back, {user?.firstName}! 👋</h1>
+        <p className="text-gray-600 mt-2">Here's what's happening with your subscription business today.</p>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        {/* Placeholder for other dashboard cards */}
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Revenue</CardTitle>
-            <DollarSign className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">$45,231.89</div>
-            <p className="text-xs text-muted-foreground">+20.1% from last month</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Subscriptions</CardTitle>
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth="2"
-              className="h-4 w-4 text-muted-foreground"
-            >
-              <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
-              <circle cx="9" cy="7" r="4" />
-              <path d="M22 21v-2a4 4 0 0 0-3-3.87m-3-1.13a4 4 0 0 1 0-7.75" />
-            </svg>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">+2350</div>
-            <p className="text-xs text-muted-foreground">+180.1% from last month</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Sales</CardTitle>
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth="2"
-              className="h-4 w-4 text-muted-foreground"
-            >
-              <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
-            </svg>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">+12,234</div>
-            <p className="text-xs text-muted-foreground">+19% from last month</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Active Now</CardTitle>
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth="2"
-              className="h-4 w-4 text-muted-foreground"
-            >
-              <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
-            </svg>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">+573</div>
-            <p className="text-xs text-muted-foreground">+201 since last hour</p>
-          </CardContent>
-        </Card>
+      {/* Stats Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        {stats.map((stat) => (
+          <Card key={stat.title}>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium text-gray-600">{stat.title}</CardTitle>
+              <stat.icon className="h-4 w-4 text-gray-400" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{stat.value}</div>
+              <div className="flex items-center gap-1 text-xs">
+                <Badge variant={stat.changeType === "positive" ? "default" : "destructive"} className="text-xs">
+                  {stat.change}
+                </Badge>
+                <span className="text-gray-500">from last month</span>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
-        <Card className="col-span-4">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Recent Activity */}
+        <Card>
           <CardHeader>
-            <CardTitle>Current Exchange Rates</CardTitle>
-            <CardDescription>Real-time rates for key currencies against USD.</CardDescription>
+            <CardTitle>Recent Activity</CardTitle>
+            <CardDescription>Latest updates from your subscription business</CardDescription>
           </CardHeader>
           <CardContent>
-            {isLoading && <p className="text-center py-4">Loading exchange rates...</p>}
-            {error && <p className="text-red-500 text-center py-4">Error: {error}</p>}
-            {!isLoading && !error && (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Currency</TableHead>
-                    <TableHead>Rate (1 USD = ?)</TableHead>
-                    <TableHead>Last Updated</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {displayRates.length > 0 ? (
-                    displayRates.map((rate) => (
-                      <TableRow key={rate.target_currency}>
-                        <TableCell className="font-medium">
-                          {getCurrencyFlag(rate.target_currency)} {rate.target_currency}
-                        </TableCell>
-                        <TableCell>{rate.rate.toFixed(4)}</TableCell>
-                        <TableCell>{new Date(rate.last_updated).toLocaleString()}</TableCell>
-                      </TableRow>
-                    ))
-                  ) : (
-                    <TableRow>
-                      <TableCell colSpan={3} className="text-center py-4">
-                        No exchange rates available.
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </TableBody>
-              </Table>
-            )}
+            <div className="space-y-4">
+              {recentActivity.map((activity) => (
+                <div key={activity.id} className="flex items-center gap-3">
+                  <div className="flex-shrink-0">{getActivityIcon(activity.type)}</div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-gray-900">{activity.description}</p>
+                    <p className="text-xs text-gray-500">{activity.time}</p>
+                  </div>
+                  {activity.amount && <div className="text-sm font-medium text-gray-900">{activity.amount}</div>}
+                </div>
+              ))}
+            </div>
           </CardContent>
         </Card>
-        {/* Placeholder for other dashboard content */}
-        <Card className="col-span-3">
+
+        {/* Current Exchange Rates */}
+        <Card>
           <CardHeader>
-            <CardTitle>Recent Sales</CardTitle>
-            <CardDescription>You made 265 sales this month.</CardDescription>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle>Current Exchange Rates</CardTitle>
+                <CardDescription>Live rates for multi-currency invoicing</CardDescription>
+              </div>
+              <Button variant="outline" size="sm" onClick={fetchRates} disabled={isLoading}>
+                <RefreshCw className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`} />
+              </Button>
+            </div>
           </CardHeader>
           <CardContent>
-            <div className="space-y-8">
-              <div className="flex items-center">
-                <div className="h-9 w-9 rounded-full bg-gray-100 flex items-center justify-center">
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth="2"
-                    className="h-5 w-5 text-gray-500"
-                  >
-                    <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
-                    <circle cx="9" cy="7" r="4" />
-                    <path d="M22 21v-2a4 4 0 0 0-3-3.87m-3-1.13a4 4 0 0 1 0-7.75" />
-                  </svg>
+            <div className="space-y-3">
+              {safeRates.slice(0, 6).map((rate) => (
+                <div key={rate.currency} className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="text-lg">{getCurrencyFlag(rate.currency)}</span>
+                    <span className="font-medium">{rate.currency}</span>
+                  </div>
+                  <div className="text-right">
+                    <div className="font-mono text-sm">{rate.rate.toFixed(4)}</div>
+                    <div className="text-xs text-gray-500">vs USD</div>
+                  </div>
                 </div>
-                <div className="ml-4 space-y-1">
-                  <p className="text-sm font-medium leading-none">Olivia Martin</p>
-                  <p className="text-sm text-muted-foreground">olivia.martin@email.com</p>
+              ))}
+              {safeRates.length > 6 && (
+                <div className="text-center pt-2">
+                  <Button variant="ghost" size="sm">
+                    View all {safeRates.length} currencies
+                  </Button>
                 </div>
-                <div className="ml-auto font-medium">+$1,999.00</div>
-              </div>
-              <div className="flex items-center">
-                <div className="h-9 w-9 rounded-full bg-gray-100 flex items-center justify-center">
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth="2"
-                    className="h-5 w-5 text-gray-500"
-                  >
-                    <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
-                    <circle cx="9" cy="7" r="4" />
-                    <path d="M22 21v-2a4 4 0 0 0-3-3.87m-3-1.13a4 4 0 0 1 0-7.75" />
-                  </svg>
-                </div>
-                <div className="ml-4 space-y-1">
-                  <p className="text-sm font-medium leading-none">Jackson Lee</p>
-                  <p className="text-sm text-muted-foreground">jackson.lee@email.com</p>
-                </div>
-                <div className="ml-auto font-medium">+$39.00</div>
-              </div>
-              <div className="flex items-center">
-                <div className="h-9 w-9 rounded-full bg-gray-100 flex items-center justify-center">
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth="2"
-                    className="h-5 w-5 text-gray-500"
-                  >
-                    <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
-                    <circle cx="9" cy="7" r="4" />
-                    <path d="M22 21v-2a4 4 0 0 0-3-3.87m-3-1.13a4 4 0 0 1 0-7.75" />
-                  </svg>
-                </div>
-                <div className="ml-4 space-y-1">
-                  <p className="text-sm font-medium leading-none">Isabella Nguyen</p>
-                  <p className="text-sm text-muted-foreground">isabella.nguyen@email.com</p>
-                </div>
-                <div className="ml-auto font-medium">+$299.00</div>
-              </div>
-              <div className="flex items-center">
-                <div className="h-9 w-9 rounded-full bg-gray-100 flex items-center justify-center">
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth="2"
-                    className="h-5 w-5 text-gray-500"
-                  >
-                    <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
-                    <circle cx="9" cy="7" r="4" />
-                    <path d="M22 21v-2a4 4 0 0 0-3-3.87m-3-1.13a4 4 0 0 1 0-7.75" />
-                  </svg>
-                </div>
-                <div className="ml-4 space-y-1">
-                  <p className="text-sm font-medium leading-none">William Kim</p>
-                  <p className="text-sm text-muted-foreground">will@email.com</p>
-                </div>
-                <div className="ml-auto font-medium">+$99.00</div>
-              </div>
-              <div className="flex items-center">
-                <div className="h-9 w-9 rounded-full bg-gray-100 flex items-center justify-center">
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth="2"
-                    className="h-5 w-5 text-gray-500"
-                  >
-                    <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
-                    <circle cx="9" cy="7" r="4" />
-                    <path d="M22 21v-2a4 4 0 0 0-3-3.87m-3-1.13a4 4 0 0 1 0-7.75" />
-                  </svg>
-                </div>
-                <div className="ml-4 space-y-1">
-                  <p className="text-sm font-medium leading-none">Sofia Davis</p>
-                  <p className="text-sm text-muted-foreground">sofia.davis@email.com</p>
-                </div>
-                <div className="ml-auto font-medium">+$39.00</div>
-              </div>
+              )}
             </div>
           </CardContent>
         </Card>
       </div>
-      <ExchangeRateModal isOpen={isModalOpen} onClose={handleCloseModal} />
     </div>
   )
 }
