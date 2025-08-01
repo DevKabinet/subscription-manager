@@ -312,7 +312,7 @@ export function ExchangeRateModal({ isOpen, onClose }: ExchangeRateModalProps) {
                                 <div className="flex items-center gap-2">
                                   <p className="text-sm text-gray-600">{getCurrencyName(rate.target_currency)}</p>
                                   {isProtected && (
-                                    <Badge variant="outline" className="text-xs flex items-center gap-1">
+                                    <Badge variant="outline" className="text-xs flex items-center gap-1 bg-red-300 text-red-100">
                                       <Shield className="h-3 w-3" />
                                       Protected
                                     </Badge>
