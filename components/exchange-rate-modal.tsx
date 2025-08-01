@@ -322,7 +322,7 @@ export function ExchangeRateModal({ isOpen, onClose }: ExchangeRateModalProps) {
                             </div>
 
                             <div className="flex items-center gap-2">
-                              <div className="flex gap-1 flex-row items-center">
+                              <div className="flex gap-1 flex-row-reverse items-center">
                                 {rate.is_manual && (
                                   <Badge variant="outline" className="text-xs">
                                     Manual
