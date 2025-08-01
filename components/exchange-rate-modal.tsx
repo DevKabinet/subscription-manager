@@ -1,14 +1,17 @@
 "use client"
-import { useState } from "react"
+
+import { useState, useEffect } from "react"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { RefreshCw, Edit2, Save, X, TrendingUp, TrendingDown } from "lucide-react"
+import { Badge } from "@/components/ui/badge"
+import { RefreshCw, Save, Edit2, History, Calculator, TrendingUp, TrendingDown } from "lucide-react"
 import { useExchangeRateStore } from "@/lib/exchange-rates"
+import { useAuthStore } from "@/lib/auth"
 
 interface ExchangeRateModalProps {
   isOpen: boolean
@@ -16,9 +19,32 @@ interface ExchangeRateModalProps {
 }
 
 export function ExchangeRateModal({ isOpen, onClose }: ExchangeRateModalProps) {
-  const { rates, isLoading, fetchRates, updateRate, lastFetched } = useExchangeRateStore()
+  const { user } = useAuthStore()
+  const {
+    rates,
+    changeLog,
+    isLoading,
+    error,
+    fetchRates,
+    updateRate,
+    getSupportedCurrencies,
+    getCurrencyFlag,
+    getCurrencyName,
+    convertAmount,
+    lastFetched,
+  } = useExchangeRateStore()
+
   const [editingCurrency, setEditingCurrency] = useState<string | null>(null)
   const [editValue, setEditValue] = useState("")
+  const [converterAmount, setConverterAmount] = useState("100")
+  const [converterFrom, setConverterFrom] = useState("USD")
+  const [converterTo, setConverterTo] = useState("EUR")
+
+  useEffect(() => {
+    if (isOpen) {
+      fetchRates()
+    }
+  }, [isOpen, fetchRates])
 
   const handleEdit = (currency: string, currentRate: number) => {
     setEditingCurrency(currency)
@@ -26,14 +52,14 @@ export function ExchangeRateModal({ isOpen, onClose }: ExchangeRateModalProps) {
   }
 
   const handleSave = () => {
-    if (editingCurrency && editValue) {
+    if (editingCurrency && editValue && user) {
       const newRate = Number.parseFloat(editValue)
       if (!isNaN(newRate) && newRate > 0) {
-        updateRate(editingCurrency, newRate)
+        updateRate(editingCurrency, newRate, `${user.firstName} ${user.lastName}`)
+        setEditingCurrency(null)
+        setEditValue("")
       }
     }
-    setEditingCurrency(null)
-    setEditValue("")
   }
 
   const handleCancel = () => {
@@ -41,197 +67,282 @@ export function ExchangeRateModal({ isOpen, onClose }: ExchangeRateModalProps) {
     setEditValue("")
   }
 
-  const formatLastUpdated = (dateString: string) => {
-    const date = new Date(dateString)
-    return date.toLocaleString()
+  const formatDateTime = (dateString: string) => {
+    return new Date(dateString).toLocaleString()
   }
 
-  const getCurrencyFlag = (currency: string) => {
-    const flags: Record<string, string> = {
-      USD: "🇺🇸",
-      EUR: "🇪🇺",
-      GBP: "🇬🇧",
-      JPY: "🇯🇵",
-      CAD: "🇨🇦",
-      AUD: "🇦🇺",
-      CHF: "🇨🇭",
-      CNY: "🇨🇳",
+  const getChangeIcon = (oldRate: number, newRate: number) => {
+    if (newRate > oldRate) {
+      return <TrendingUp className="h-4 w-4 text-green-500" />
+    } else if (newRate < oldRate) {
+      return <TrendingDown className="h-4 w-4 text-red-500" />
     }
-    return flags[currency] || "💱"
+    return null
   }
 
-  const getTrendIcon = (rate: number) => {
-    // Simulate trend based on rate value (this would be real historical data in production)
-    const trend = Math.random() > 0.5
-    return trend ? <TrendingUp className="h-4 w-4 text-green-500" /> : <TrendingDown className="h-4 w-4 text-red-500" />
-  }
+  const supportedCurrencies = getSupportedCurrencies()
+  const nonUsdRates = rates.filter((rate) => rate.targetCurrency !== "USD")
 
-  // Ensure rates is an array before rendering
-  const safeRates = Array.isArray(rates) ? rates : []
+  const convertedAmount = converterAmount
+    ? convertAmount(Number.parseFloat(converterAmount), converterFrom, converterTo)
+    : 0
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            💱 Global Exchange Rates
-            <Badge variant="outline" className="text-xs">
-              Base: USD
-            </Badge>
+            💱 Exchange Rate Management
+            <Badge variant="outline">Base: USD</Badge>
           </DialogTitle>
           <DialogDescription>
-            Manage exchange rates for multi-currency invoicing and payments
+            Manage exchange rates for USD, EUR, and SRD currencies
             {lastFetched && (
-              <span className="block text-xs text-gray-500 mt-1">Last updated: {formatLastUpdated(lastFetched)}</span>
+              <span className="block text-xs text-muted-foreground mt-1">
+                Last updated: {formatDateTime(lastFetched)}
+              </span>
             )}
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-6">
-          {/* Actions */}
-          <div className="flex justify-between items-center">
-            <div className="text-sm text-gray-600">{safeRates.length} currencies available</div>
-            <Button
-              onClick={fetchRates}
-              disabled={isLoading}
-              variant="outline"
-              size="sm"
-              className="flex items-center gap-2 bg-transparent"
-            >
-              <RefreshCw className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`} />
-              {isLoading ? "Updating..." : "Refresh Rates"}
-            </Button>
-          </div>
+        <Tabs defaultValue="rates" className="w-full">
+          <TabsList className="grid w-full grid-cols-3">
+            <TabsTrigger value="rates">Current Rates</TabsTrigger>
+            <TabsTrigger value="converter">Currency Converter</TabsTrigger>
+            <TabsTrigger value="history">Change Log</TabsTrigger>
+          </TabsList>
 
-          {/* Exchange Rates Table */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg">Current Exchange Rates</CardTitle>
-              <CardDescription>
-                Click the edit button to manually adjust rates. All rates are relative to USD (1.00).
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Currency</TableHead>
-                    <TableHead>Rate (USD)</TableHead>
-                    <TableHead>Trend</TableHead>
-                    <TableHead>Last Updated</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {safeRates.map((rate) => (
-                    <TableRow key={rate.currency}>
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          <span className="text-lg">{getCurrencyFlag(rate.currency)}</span>
-                          <div>
-                            <div className="font-medium">{rate.currency}</div>
-                            <div className="text-xs text-gray-500">
-                              {rate.currency === "USD" && "US Dollar"}
-                              {rate.currency === "EUR" && "Euro"}
-                              {rate.currency === "GBP" && "British Pound"}
-                              {rate.currency === "JPY" && "Japanese Yen"}
-                              {rate.currency === "CAD" && "Canadian Dollar"}
-                              {rate.currency === "AUD" && "Australian Dollar"}
-                              {rate.currency === "CHF" && "Swiss Franc"}
-                              {rate.currency === "CNY" && "Chinese Yuan"}
+          <TabsContent value="rates" className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="text-sm text-muted-foreground">{supportedCurrencies.length} currencies supported</div>
+              <Button onClick={fetchRates} disabled={isLoading} size="sm">
+                <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? "animate-spin" : ""}`} />
+                {isLoading ? "Updating..." : "Refresh Rates"}
+              </Button>
+            </div>
+
+            {error && (
+              <div className="bg-red-50 border border-red-200 rounded-md p-3 text-red-700 text-sm">{error}</div>
+            )}
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Exchange Rates</CardTitle>
+                <CardDescription>
+                  All rates are relative to USD (1.00). Click edit to manually adjust rates.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Currency</TableHead>
+                      <TableHead>Rate (1 USD = ?)</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Last Updated</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {nonUsdRates.map((rate) => (
+                      <TableRow key={rate.id}>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <span className="text-lg">{getCurrencyFlag(rate.targetCurrency)}</span>
+                            <div>
+                              <div className="font-medium">{rate.targetCurrency}</div>
+                              <div className="text-xs text-muted-foreground">
+                                {getCurrencyName(rate.targetCurrency)}
+                              </div>
                             </div>
                           </div>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        {editingCurrency === rate.currency ? (
-                          <div className="flex items-center gap-2">
-                            <Input
-                              type="number"
-                              step="0.0001"
-                              value={editValue}
-                              onChange={(e) => setEditValue(e.target.value)}
-                              className="w-24"
-                              autoFocus
-                            />
-                          </div>
-                        ) : (
-                          <div className="font-mono">{rate.rate.toFixed(4)}</div>
-                        )}
-                      </TableCell>
-                      <TableCell>{getTrendIcon(rate.rate)}</TableCell>
-                      <TableCell className="text-sm text-gray-500">{formatLastUpdated(rate.lastUpdated)}</TableCell>
-                      <TableCell className="text-right">
-                        {editingCurrency === rate.currency ? (
-                          <div className="flex items-center gap-1 justify-end">
-                            <Button size="sm" variant="ghost" onClick={handleSave} className="h-8 w-8 p-0">
-                              <Save className="h-4 w-4" />
+                        </TableCell>
+                        <TableCell>
+                          {editingCurrency === rate.targetCurrency ? (
+                            <div className="flex items-center gap-2">
+                              <Input
+                                type="number"
+                                step="0.0001"
+                                value={editValue}
+                                onChange={(e) => setEditValue(e.target.value)}
+                                className="w-32"
+                                autoFocus
+                              />
+                            </div>
+                          ) : (
+                            <div className="font-mono text-lg">{rate.rate.toFixed(4)}</div>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {rate.isManual ? (
+                            <Badge variant="secondary">Manual</Badge>
+                          ) : (
+                            <Badge variant="outline">API</Badge>
+                          )}
+                          {rate.updatedBy && (
+                            <div className="text-xs text-muted-foreground mt-1">by {rate.updatedBy}</div>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-sm text-muted-foreground">
+                          {formatDateTime(rate.lastUpdated)}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {editingCurrency === rate.targetCurrency ? (
+                            <div className="flex items-center gap-1 justify-end">
+                              <Button size="sm" onClick={handleSave}>
+                                <Save className="h-4 w-4 mr-1" />
+                                Save
+                              </Button>
+                              <Button size="sm" variant="outline" onClick={handleCancel}>
+                                Cancel
+                              </Button>
+                            </div>
+                          ) : (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleEdit(rate.targetCurrency, rate.rate)}
+                            >
+                              <Edit2 className="h-4 w-4 mr-1" />
+                              Edit
                             </Button>
-                            <Button size="sm" variant="ghost" onClick={handleCancel} className="h-8 w-8 p-0">
-                              <X className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        ) : (
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => handleEdit(rate.currency, rate.rate)}
-                            className="h-8 w-8 p-0"
-                            disabled={rate.currency === "USD"} // Can't edit base currency
-                          >
-                            <Edit2 className="h-4 w-4" />
-                          </Button>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          </TabsContent>
 
-          {/* Quick Conversion Calculator */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg">Quick Converter</CardTitle>
-              <CardDescription>Convert between currencies using current rates</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
-                <div className="space-y-2">
-                  <Label htmlFor="amount">Amount</Label>
-                  <Input id="amount" type="number" placeholder="100" step="0.01" />
+          <TabsContent value="converter" className="space-y-4">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Calculator className="h-5 w-5" />
+                  Currency Converter
+                </CardTitle>
+                <CardDescription>Convert between supported currencies using current rates</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+                  <div className="space-y-2">
+                    <Label htmlFor="amount">Amount</Label>
+                    <Input
+                      id="amount"
+                      type="number"
+                      value={converterAmount}
+                      onChange={(e) => setConverterAmount(e.target.value)}
+                      placeholder="100"
+                      step="0.01"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="fromCurrency">From</Label>
+                    <select
+                      id="fromCurrency"
+                      value={converterFrom}
+                      onChange={(e) => setConverterFrom(e.target.value)}
+                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                    >
+                      {supportedCurrencies.map((currency) => (
+                        <option key={currency} value={currency}>
+                          {getCurrencyFlag(currency)} {currency}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="toCurrency">To</Label>
+                    <select
+                      id="toCurrency"
+                      value={converterTo}
+                      onChange={(e) => setConverterTo(e.target.value)}
+                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                    >
+                      {supportedCurrencies.map((currency) => (
+                        <option key={currency} value={currency}>
+                          {getCurrencyFlag(currency)} {currency}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Result</Label>
+                    <div className="h-10 px-3 py-2 bg-muted rounded-md flex items-center font-mono text-lg">
+                      {convertedAmount.toFixed(4)} {converterTo}
+                    </div>
+                  </div>
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="fromCurrency">From</Label>
-                  <select
-                    id="fromCurrency"
-                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    {safeRates.map((rate) => (
-                      <option key={rate.currency} value={rate.currency}>
-                        {getCurrencyFlag(rate.currency)} {rate.currency}
-                      </option>
-                    ))}
-                  </select>
+                <div className="text-sm text-muted-foreground text-center">
+                  {converterAmount} {getCurrencyFlag(converterFrom)} {converterFrom} = {convertedAmount.toFixed(4)}{" "}
+                  {getCurrencyFlag(converterTo)} {converterTo}
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="toCurrency">To</Label>
-                  <select
-                    id="toCurrency"
-                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    {safeRates.map((rate) => (
-                      <option key={rate.currency} value={rate.currency}>
-                        {getCurrencyFlag(rate.currency)} {rate.currency}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="history" className="space-y-4">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <History className="h-5 w-5" />
+                  Exchange Rate Change Log
+                </CardTitle>
+                <CardDescription>History of all rate changes and updates</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {changeLog.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    No changes recorded yet. Rate changes will appear here.
+                  </div>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Date & Time</TableHead>
+                        <TableHead>Currency</TableHead>
+                        <TableHead>Change</TableHead>
+                        <TableHead>Type</TableHead>
+                        <TableHead>Updated By</TableHead>
+                        <TableHead>Notes</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {changeLog.map((change) => (
+                        <TableRow key={change.id}>
+                          <TableCell className="text-sm">{formatDateTime(change.timestamp)}</TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-2">
+                              <span>{getCurrencyFlag(change.targetCurrency)}</span>
+                              <span className="font-medium">{change.targetCurrency}</span>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-2">
+                              {getChangeIcon(change.oldRate, change.newRate)}
+                              <div className="font-mono text-sm">
+                                {change.oldRate.toFixed(4)} → {change.newRate.toFixed(4)}
+                              </div>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant={change.changeType === "manual" ? "default" : "outline"}>
+                              {change.changeType}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-sm">{change.updatedBy}</TableCell>
+                          <TableCell className="text-sm text-muted-foreground">{change.notes}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
       </DialogContent>
     </Dialog>
   )

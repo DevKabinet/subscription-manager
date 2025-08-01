@@ -4,83 +4,49 @@ import { create } from "zustand"
 import { persist } from "zustand/middleware"
 
 export interface User {
-  id: number
+  id: string
   email: string
   firstName: string
   lastName: string
-  roleId: number
-  roleName: string
-  rolePermissions: Record<string, any>
-  isActive: boolean
-  lastLogin?: string
-  createdAt: string
+  role: "admin" | "manager" | "user"
+  avatar?: string
 }
 
 interface AuthState {
   user: User | null
   isAuthenticated: boolean
-  login: (email: string, password: string) => Promise<{ success: boolean; message: string }>
+  login: (email: string, password: string) => Promise<boolean>
   logout: () => void
-  updateLastLogin: () => void
-  hasPermission: (resource: string, action: string) => boolean
-  isAdmin: () => boolean
-  isManager: () => boolean
+  checkAuth: () => boolean
 }
 
-// Mock user database - in production, this would be API calls
-const mockUsers: Record<string, User & { password: string }> = {
-  "admin@company.com": {
-    id: 1,
+// Mock users for demo
+const mockUsers: User[] = [
+  {
+    id: "1",
     email: "admin@company.com",
-    password: "admin123",
-    firstName: "System",
-    lastName: "Administrator",
-    roleId: 1,
-    roleName: "admin",
-    rolePermissions: {
-      users: { create: true, read: true, update: true, delete: true },
-      settings: { manage: true },
-      invoices: { create: true, read: true, update: true, delete: true },
-      payments: { create: true, read: true, update: true, delete: true },
-    },
-    isActive: true,
-    createdAt: "2024-01-01T00:00:00Z",
-  },
-  "manager@company.com": {
-    id: 2,
-    email: "manager@company.com",
-    password: "manager123",
-    firstName: "John",
-    lastName: "Manager",
-    roleId: 2,
-    roleName: "manager",
-    rolePermissions: {
-      users: { create: false, read: true, update: false, delete: false },
-      settings: { manage: false },
-      invoices: { create: true, read: true, update: true, delete: false },
-      payments: { create: true, read: true, update: true, delete: false },
-    },
-    isActive: true,
-    createdAt: "2024-01-01T00:00:00Z",
-  },
-  "user@company.com": {
-    id: 3,
-    email: "user@company.com",
-    password: "user123",
-    firstName: "Jane",
+    firstName: "Admin",
     lastName: "User",
-    roleId: 3,
-    roleName: "user",
-    rolePermissions: {
-      users: { create: false, read: false, update: false, delete: false },
-      settings: { manage: false },
-      invoices: { create: true, read: true, update: false, delete: false },
-      payments: { create: true, read: true, update: false, delete: false },
-    },
-    isActive: true,
-    createdAt: "2024-01-01T00:00:00Z",
+    role: "admin",
+    avatar: "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=32&h=32&fit=crop&crop=face",
   },
-}
+  {
+    id: "2",
+    email: "manager@company.com",
+    firstName: "Manager",
+    lastName: "User",
+    role: "manager",
+    avatar: "https://images.unsplash.com/photo-1494790108755-2616b612b786?w=32&h=32&fit=crop&crop=face",
+  },
+  {
+    id: "3",
+    email: "user@company.com",
+    firstName: "Regular",
+    lastName: "User",
+    role: "user",
+    avatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=32&h=32&fit=crop&crop=face",
+  },
+]
 
 export const useAuthStore = create<AuthState>()(
   persist(
@@ -89,71 +55,33 @@ export const useAuthStore = create<AuthState>()(
       isAuthenticated: false,
 
       login: async (email: string, password: string) => {
-        // Simulate API delay
+        // Simulate API call
         await new Promise((resolve) => setTimeout(resolve, 1000))
 
-        const mockUser = mockUsers[email.toLowerCase()]
+        const user = mockUsers.find((u) => u.email === email)
 
-        if (!mockUser || mockUser.password !== password) {
-          return { success: false, message: "Invalid email or password" }
+        // Simple password check for demo
+        const validPasswords: Record<string, string> = {
+          "admin@company.com": "admin123",
+          "manager@company.com": "manager123",
+          "user@company.com": "user123",
         }
 
-        if (!mockUser.isActive) {
-          return { success: false, message: "Account is deactivated" }
+        if (user && validPasswords[email] === password) {
+          set({ user, isAuthenticated: true })
+          return true
         }
 
-        const { password: _, ...user } = mockUser
-        user.lastLogin = new Date().toISOString()
-
-        set({
-          user,
-          isAuthenticated: true,
-        })
-
-        // Store in localStorage for compatibility
-        localStorage.setItem("isAuthenticated", "true")
-        localStorage.setItem("userEmail", user.email)
-        localStorage.setItem("userRole", user.roleName)
-
-        return { success: true, message: "Login successful" }
+        return false
       },
 
       logout: () => {
         set({ user: null, isAuthenticated: false })
-        localStorage.removeItem("isAuthenticated")
-        localStorage.removeItem("userEmail")
-        localStorage.removeItem("userRole")
-        localStorage.removeItem("isTester")
       },
 
-      updateLastLogin: () => {
+      checkAuth: () => {
         const { user } = get()
-        if (user) {
-          set({
-            user: {
-              ...user,
-              lastLogin: new Date().toISOString(),
-            },
-          })
-        }
-      },
-
-      hasPermission: (resource: string, action: string) => {
-        const { user } = get()
-        if (!user) return false
-
-        const resourcePermissions = user.rolePermissions[resource]
-        return resourcePermissions && resourcePermissions[action] === true
-      },
-
-      isAdmin: () => {
-        const { user } = get()
-        return user?.roleName === "admin"
-      },
-
-      isManager: () => {
-        const { user } = get()
-        return user?.roleName === "manager" || user?.roleName === "admin"
+        return !!user
       },
     }),
     {

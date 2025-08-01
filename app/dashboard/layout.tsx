@@ -28,9 +28,15 @@ export default function DashboardLayout({
 
   const { settings, updateSettings, isSetupComplete } = useCompanySettingsStore()
   const { fetchRates, lastFetched } = useExchangeRateStore()
-  const { user, isAuthenticated, logout } = useAuthStore()
+  const { isAuthenticated, checkAuth, user, logout } = useAuthStore()
 
   const [formSettings, setFormSettings] = useState(settings)
+
+  useEffect(() => {
+    if (!checkAuth()) {
+      router.push("/login")
+    }
+  }, [checkAuth, router])
 
   useEffect(() => {
     if (!isAuthenticated || !user) {
@@ -72,8 +78,12 @@ export default function DashboardLayout({
     setFormSettings((prev) => ({ ...prev, [field]: value }))
   }
 
-  if (!isAuthenticated || !user) {
-    return null // Will redirect to login
+  if (!isAuthenticated) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600"></div>
+      </div>
+    )
   }
 
   const getRoleBadgeColor = (roleName: string) => {

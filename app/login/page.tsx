@@ -9,20 +9,16 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Badge } from "@/components/ui/badge"
-import { Eye, EyeOff, LogIn, Shield, User, UserCheck } from "lucide-react"
+import { Loader2, Building2, User, Shield } from "lucide-react"
 import { useAuthStore } from "@/lib/auth"
 
 export default function LoginPage() {
-  const router = useRouter()
-  const { login } = useAuthStore()
-  const [formData, setFormData] = useState({
-    email: "",
-    password: "",
-  })
-  const [showPassword, setShowPassword] = useState(false)
+  const [email, setEmail] = useState("")
+  const [password, setPassword] = useState("")
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState("")
+  const { login } = useAuthStore()
+  const router = useRouter()
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -30,111 +26,66 @@ export default function LoginPage() {
     setError("")
 
     try {
-      const result = await login(formData.email, formData.password)
-
-      if (result.success) {
+      const success = await login(email, password)
+      if (success) {
         router.push("/dashboard")
       } else {
-        setError(result.message)
+        setError("Invalid email or password")
       }
     } catch (err) {
-      setError("An unexpected error occurred")
+      setError("An error occurred during login")
     } finally {
       setIsLoading(false)
     }
   }
 
-  const handleInputChange = (field: keyof typeof formData, value: string) => {
-    setFormData((prev) => ({ ...prev, [field]: value }))
-    if (error) setError("")
-  }
-
-  const demoAccounts = [
-    {
-      email: "admin@company.com",
-      password: "admin123",
-      role: "Admin",
-      description: "Full system access",
-      icon: Shield,
-      color: "bg-red-500",
-    },
-    {
-      email: "manager@company.com",
-      password: "manager123",
-      role: "Manager",
-      description: "Limited admin access",
-      icon: UserCheck,
-      color: "bg-blue-500",
-    },
-    {
-      email: "user@company.com",
-      password: "user123",
-      role: "User",
-      description: "Basic access",
-      icon: User,
-      color: "bg-green-500",
-    },
-  ]
-
-  const fillDemoAccount = (email: string, password: string) => {
-    setFormData({ email, password })
-    setError("")
+  const handleDemoLogin = (demoEmail: string, demoPassword: string) => {
+    setEmail(demoEmail)
+    setPassword(demoPassword)
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
-      <div className="w-full max-w-md space-y-6">
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
+      <div className="max-w-md w-full space-y-8">
         <div className="text-center">
-          <h1 className="text-3xl font-bold text-gray-900">Subscription Manager</h1>
-          <p className="text-gray-600 mt-2">Sign in to your account</p>
+          <Building2 className="mx-auto h-12 w-12 text-blue-600" />
+          <h2 className="mt-6 text-3xl font-extrabold text-gray-900">Subscription Manager</h2>
+          <p className="mt-2 text-sm text-gray-600">Sign in to your account</p>
         </div>
 
-        <Card className="shadow-lg">
-          <CardHeader className="text-center">
-            <CardTitle className="flex items-center gap-2 text-center justify-center">
-              <LogIn className="h-5 w-5" />
-              Login
-            </CardTitle>
-            <CardDescription>Enter your credentials to access the system</CardDescription>
+        <Card>
+          <CardHeader>
+            <CardTitle>Sign In</CardTitle>
+            <CardDescription>Enter your credentials to access the dashboard</CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="email">Email</Label>
+              <div>
+                <Label htmlFor="email">Email address</Label>
                 <Input
                   id="email"
+                  name="email"
                   type="email"
-                  value={formData.email}
-                  onChange={(e) => handleInputChange("email", e.target.value)}
-                  placeholder="Enter your email"
+                  autoComplete="email"
                   required
-                  disabled={isLoading}
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="Enter your email"
                 />
               </div>
 
-              <div className="space-y-2">
+              <div>
                 <Label htmlFor="password">Password</Label>
-                <div className="relative">
-                  <Input
-                    id="password"
-                    type={showPassword ? "text" : "password"}
-                    value={formData.password}
-                    onChange={(e) => handleInputChange("password", e.target.value)}
-                    placeholder="Enter your password"
-                    required
-                    disabled={isLoading}
-                  />
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
-                    onClick={() => setShowPassword(!showPassword)}
-                    disabled={isLoading}
-                  >
-                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                  </Button>
-                </div>
+                <Input
+                  id="password"
+                  name="password"
+                  type="password"
+                  autoComplete="current-password"
+                  required
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Enter your password"
+                />
               </div>
 
               {error && (
@@ -144,49 +95,63 @@ export default function LoginPage() {
               )}
 
               <Button type="submit" className="w-full" disabled={isLoading}>
-                {isLoading ? "Signing in..." : "Sign In"}
+                {isLoading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Signing in...
+                  </>
+                ) : (
+                  "Sign in"
+                )}
               </Button>
             </form>
           </CardContent>
         </Card>
 
         {/* Demo Accounts */}
-        <Card className="shadow-lg">
+        <Card>
           <CardHeader>
-            <CardTitle className="text-sm">Demo Accounts</CardTitle>
-            <CardDescription className="text-xs">Click to auto-fill credentials for testing</CardDescription>
+            <CardTitle className="text-lg">Demo Accounts</CardTitle>
+            <CardDescription>Click any button below to auto-fill credentials</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-2">
-            {demoAccounts.map((account) => (
-              <Button
-                key={account.email}
-                variant="outline"
-                className="w-full justify-start h-auto p-3 bg-transparent"
-                onClick={() => fillDemoAccount(account.email, account.password)}
-                disabled={isLoading}
-              >
-                <div className="flex items-center gap-3 w-full">
-                  <div className={`p-1.5 rounded-full ${account.color}`}>
-                    <account.icon className="h-3 w-3 text-white" />
-                  </div>
-                  <div className="flex-1 text-left">
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium text-sm">{account.role}</span>
-                      <Badge variant="secondary" className="text-xs">
-                        {account.email}
-                      </Badge>
-                    </div>
-                    <p className="text-xs text-gray-500">{account.description}</p>
-                  </div>
-                </div>
-              </Button>
-            ))}
+          <CardContent className="space-y-3">
+            <Button
+              variant="outline"
+              className="w-full justify-start bg-transparent"
+              onClick={() => handleDemoLogin("admin@company.com", "admin123")}
+            >
+              <Shield className="mr-2 h-4 w-4 text-red-500" />
+              <div className="text-left">
+                <div className="font-medium">Admin Account</div>
+                <div className="text-xs text-gray-500">Full system access</div>
+              </div>
+            </Button>
+
+            <Button
+              variant="outline"
+              className="w-full justify-start bg-transparent"
+              onClick={() => handleDemoLogin("manager@company.com", "manager123")}
+            >
+              <User className="mr-2 h-4 w-4 text-blue-500" />
+              <div className="text-left">
+                <div className="font-medium">Manager Account</div>
+                <div className="text-xs text-gray-500">Management features</div>
+              </div>
+            </Button>
+
+            <Button
+              variant="outline"
+              className="w-full justify-start bg-transparent"
+              onClick={() => handleDemoLogin("user@company.com", "user123")}
+            >
+              <User className="mr-2 h-4 w-4 text-green-500" />
+              <div className="text-left">
+                <div className="font-medium">User Account</div>
+                <div className="text-xs text-gray-500">Basic access</div>
+              </div>
+            </Button>
           </CardContent>
         </Card>
-
-        <div className="text-center text-sm text-gray-500">
-          <p>© 2024 Subscription Manager. All rights reserved.</p>
-        </div>
       </div>
     </div>
   )
