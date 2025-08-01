@@ -90,8 +90,8 @@ export default function LoginPage() {
         </div>
 
         <Card className="shadow-lg">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
+          <CardHeader className="text-center">
+            <CardTitle className="flex items-center gap-2 text-center justify-center">
               <LogIn className="h-5 w-5" />
               Login
             </CardTitle>
